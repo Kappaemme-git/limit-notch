@@ -12,6 +12,8 @@ final class StatusStore: ObservableObject {
     /// Written every ~60 s by claude_live.py; preferred when it holds newer Claude data.
     private let liveURL = directory.appendingPathComponent("claude_live.json")
     private var timer: Timer?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshSerial = 0
 
     func start() {
         refresh()
@@ -21,9 +23,18 @@ final class StatusStore: ObservableObject {
     }
 
     func refresh() {
-        // Data(contentsOf:) only reads the watcher files. A missing or unreadable file is unavailable.
-        let next = StatusSnapshot.from(data: try? Data(contentsOf: statusURL),
-                                       liveData: try? Data(contentsOf: liveURL), at: Date())
-        if next != snapshot { snapshot = next }
+        refreshTask?.cancel()
+        refreshSerial += 1
+        let serial = refreshSerial
+        let statusURL = self.statusURL
+        let liveURL = self.liveURL
+        refreshTask = Task.detached(priority: .utility) { [weak self] in
+            let next = StatusSnapshot.from(data: try? Data(contentsOf: statusURL),
+                                           liveData: try? Data(contentsOf: liveURL), at: Date())
+            await MainActor.run {
+                guard let self, self.refreshSerial == serial else { return }
+                if next != self.snapshot { self.snapshot = next }
+            }
+        }
     }
 }

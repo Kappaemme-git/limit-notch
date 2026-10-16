@@ -10,7 +10,7 @@ fail() {
 [[ -n "${HOME:-}" && -d "$HOME" ]] || fail "HOME must point to your home directory."
 [[ "$(id -u)" != 0 ]] || fail "Run this as your regular macOS user, without sudo."
 
-for label in dev.kappaemme.limitnotch dev.kappaemme.limitnotch.claude-live; do
+for label in dev.kappaemme.limitnotch dev.kappaemme.limitnotch.claude-live dev.kappaemme.limitnotch.codex-live; do
     service="gui/$(id -u)/$label"
     if launchctl print "$service" >/dev/null 2>&1; then
         launchctl bootout "$service" || fail "Could not stop the LaunchAgent $label."

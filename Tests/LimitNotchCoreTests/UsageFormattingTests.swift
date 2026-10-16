@@ -34,7 +34,9 @@ final class UsageFormattingTests: XCTestCase {
 
     func testToneThresholds() {
         XCTAssertEqual(UsageTone(percent: 10), .normal)
-        XCTAssertEqual(UsageTone(percent: 70), .high)
-        XCTAssertEqual(UsageTone(percent: 95), .critical)
+        XCTAssertEqual(UsageTone(percent: 59.9), .normal)
+        XCTAssertEqual(UsageTone(percent: 60), .high)
+        XCTAssertEqual(UsageTone(percent: 84.9), .high)
+        XCTAssertEqual(UsageTone(percent: 85), .critical)
     }
 }

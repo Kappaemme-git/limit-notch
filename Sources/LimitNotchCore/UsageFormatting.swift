@@ -7,8 +7,8 @@ public enum UsageTone: Equatable, Sendable {
 
     public init(percent: Double) {
         switch percent {
-        case ..<70: self = .normal
-        case ..<90: self = .high
+        case ..<60: self = .normal
+        case ..<85: self = .high
         default: self = .critical
         }
     }
@@ -54,8 +54,8 @@ public enum UsageFormatting {
         }
     }
 
-    /// The highest of the three tracked windows, used for the collapsed gauge.
+    /// The highest reported usage window.
     public static func peak(_ status: UsageStatus?) -> Double? {
-        [status?.claude5h, status?.claude7d, status?.codex7d].compactMap { $0 }.max()
+        [status?.claude5h, status?.claude7d, status?.codex5h, status?.codex7d].compactMap { $0 }.max()
     }
 }

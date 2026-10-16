@@ -86,9 +86,9 @@ class MergeTests(unittest.TestCase):
         self.assertIsNone(claude_live.merge_status({}, self.live(at=NOW - 7 * 3600), NOW))
 
     def test_levels(self):
-        self.assertEqual(claude_live.level_for([10, None, 69.9]), ("ok", "happy"))
-        self.assertEqual(claude_live.level_for([70]), ("warn", "worried"))
-        self.assertEqual(claude_live.level_for([90]), ("crit", "panic"))
+        self.assertEqual(claude_live.level_for([10, None, 59.9]), ("ok", "happy"))
+        self.assertEqual(claude_live.level_for([68]), ("warn", "worried"))
+        self.assertEqual(claude_live.level_for([85]), ("crit", "panic"))
         self.assertEqual(claude_live.level_for([None]), (None, None))
 
 

@@ -2,9 +2,8 @@ import AppKit
 import LimitNotchCore
 import SwiftUI
 
-/// Black notch extension. Collapsed it is the camera housing plus two thin ears, the mascot on
-/// the left and a usage ring on the right; on hover it springs open into a Dynamic Island-style
-/// panel whose outline morphs continuously from the notch shape.
+/// The fixed-size drawing surface prevents layout work during the silhouette spring. The panel
+/// window clips it to the hardware camera housing while collapsed.
 struct NotchView: View {
     @ObservedObject var store: StatusStore
     @ObservedObject var notch: NotchState
@@ -18,26 +17,32 @@ struct NotchView: View {
 
     private var geometry: NotchGeometry { notch.geometry }
     private var expanded: Bool { notch.isExpanded }
-    private var size: CGSize { expanded ? geometry.expandedSize : geometry.collapsedSize }
     private var status: UsageStatus? { store.snapshot.status }
     private var isCurrent: Bool {
         if case .current = store.snapshot { return true }
         return false
     }
 
-    private var mascotDiameter: CGFloat {
-        expanded ? Metrics.expandedMascot : geometry.earContentSize
-    }
-
     private var mascotCenter: CGPoint {
-        guard expanded else { return geometry.leftEarCenter }
-        return CGPoint(
+        CGPoint(
             x: Metrics.inset + Metrics.expandedMascot / 2,
             y: geometry.barHeight + (NotchGeometry.expandedContentHeight - 12) / 2
         )
     }
 
     var body: some View {
+        drawingSurface
+        .contextMenu {
+            Button("Refresh Now") { store.refresh() }
+            Divider()
+            Button("Quit LimitNotch") { NSApp.terminate(nil) }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint("Hover to view usage and reset times")
+    }
+
+    private var drawingSurface: some View {
         ZStack(alignment: .topLeading) {
             NotchBody(geometry: geometry, progress: expanded ? 1 : 0)
                 .fill(Color.black.shadow(.inner(color: .white.opacity(expanded ? 0.11 : 0), radius: 5, y: -1.5)))
@@ -51,27 +56,16 @@ struct NotchView: View {
                     ))
             }
 
-            UsageRing(value: UsageFormatting.peak(status), dimmed: !isCurrent)
-                .frame(width: geometry.earContentSize - 2, height: geometry.earContentSize - 2)
-                .position(x: size.width - geometry.leftEarCenter.x, y: geometry.barHeight / 2)
-                .opacity(expanded ? 0 : 1)
-                .scaleEffect(expanded ? 0.6 : 1)
-
-            MascotView(state: store.snapshot.creatureState, diameter: mascotDiameter, isAnimating: notch.isAnimating)
-                .position(mascotCenter)
+            if expanded {
+                MascotView(state: store.snapshot.creatureState, diameter: Metrics.expandedMascot,
+                           isAnimating: notch.isAnimating)
+                    .frame(width: Metrics.expandedMascot * 2, height: Metrics.expandedMascot * 2)
+                    .position(mascotCenter)
+                    .transition(.opacity.animation(.easeOut(duration: 0.18).delay(0.1)))
+            }
         }
-        .frame(width: size.width, height: size.height)
-        .compositingGroup()
+        .frame(width: geometry.expandedSize.width, height: geometry.expandedSize.height)
         .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
-        .contextMenu {
-            Button("Refresh Now") { store.refresh() }
-            Divider()
-            Button("Quit LimitNotch") { NSApp.terminate(nil) }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilitySummary)
-        .accessibilityHint("Hover to view usage and reset times")
     }
 
     // MARK: - Expanded panel
@@ -89,6 +83,10 @@ struct NotchView: View {
                              dimmed: !isCurrent, now: timeline.date)
                     UsageRow(label: "Claude · week", value: status?.claude7d, resetsAt: status?.claude7dResetsAt,
                              dimmed: !isCurrent, now: timeline.date)
+                    if status?.codex5h != nil {
+                        UsageRow(label: "Codex · 5h", value: status?.codex5h, resetsAt: status?.codex5hResetsAt,
+                                 dimmed: !isCurrent, now: timeline.date)
+                    }
                     UsageRow(label: "Codex · week", value: status?.codex7d, resetsAt: status?.codex7dResetsAt,
                              dimmed: !isCurrent, now: timeline.date)
                     Text(footerText(now: timeline.date))
@@ -172,6 +170,7 @@ struct NotchView: View {
         let usage = [
             "Claude 5 hours \(UsageFormatting.percent(status?.claude5h))",
             "Claude week \(UsageFormatting.percent(status?.claude7d))",
+            "Codex 5 hours \(UsageFormatting.percent(status?.codex5h))",
             "Codex week \(UsageFormatting.percent(status?.codex7d))"
         ].joined(separator: ", ")
         return "LimitNotch: \(statusTitle). \(usage)"
@@ -204,7 +203,13 @@ private struct NotchBody: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        Path(geometry.outline(progress: progress).path(in: rect))
+        let t = min(max(progress, 0), 1)
+        let collapsed = geometry.collapsedSize
+        let expanded = geometry.expandedSize
+        let width = collapsed.width + (expanded.width - collapsed.width) * t
+        let height = collapsed.height + (expanded.height - collapsed.height) * t
+        let bodyRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
+        return Path(geometry.outline(progress: t).path(in: bodyRect))
     }
 }
 
@@ -256,27 +261,6 @@ private struct UsageBar: View {
                 }
             }
         }
-    }
-}
-
-private struct UsageRing: View {
-    let value: Double?
-    let dimmed: Bool
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(.white.opacity(0.16), lineWidth: 2.2)
-            if let value {
-                Circle()
-                    .trim(from: 0, to: max(min(value, 100) / 100, 0.02))
-                    .stroke(
-                        dimmed ? Color(white: 0.55) : Palette.color(for: UsageTone(percent: value)),
-                        style: StrokeStyle(lineWidth: 2.2, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-            }
-        }
-        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: value)
     }
 }
 

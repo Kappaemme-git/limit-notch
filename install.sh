@@ -38,6 +38,17 @@ helper="$install_dir/claude_live.py"
 helper_label="dev.kappaemme.limitnotch.claude-live"
 helper_plist="$agent_dir/$helper_label.plist"
 helper_service="$domain/$helper_label"
+codex_helper="$install_dir/codex_live.py"
+codex_label="dev.kappaemme.limitnotch.codex-live"
+codex_plist="$agent_dir/$codex_label.plist"
+codex_service="$domain/$codex_label"
+codex_cli=$(command -v codex || true)
+[[ -n "$codex_cli" ]] || fail "Codex CLI is missing. Install Codex before enabling live Codex usage."
+node_cli=$(command -v node || true)
+codex_path="$(dirname "$codex_cli"):/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+if [[ -n "$node_cli" ]]; then
+    codex_path="$(dirname "$node_cli"):$codex_path"
+fi
 
 mkdir -p "$install_dir"
 if [[ -e "$source_dir" || -L "$source_dir" ]]; then
@@ -64,19 +75,23 @@ source_binary="$source_dir/.build/release/LimitNotch"
 [[ -x "$source_binary" ]] || fail "The release build did not produce LimitNotch."
 
 [[ -f "$source_dir/scripts/claude_live.py" ]] || fail "The checkout has no scripts/claude_live.py."
+[[ -f "$source_dir/scripts/codex_live.py" ]] || fail "The checkout has no scripts/codex_live.py."
 
 mkdir -p "$HOME/.usage-watcher" "$agent_dir"
 temp_binary=$(mktemp "$install_dir/.LimitNotch.XXXXXX")
 temp_helper=$(mktemp "$install_dir/.claude_live.XXXXXX")
+temp_codex_helper=$(mktemp "$install_dir/.codex_live.XXXXXX")
 temp_plist=$(mktemp "$agent_dir/.dev.kappaemme.limitnotch.XXXXXX")
 temp_helper_plist=$(mktemp "$agent_dir/.dev.kappaemme.limitnotch.claude-live.XXXXXX")
+temp_codex_plist=$(mktemp "$agent_dir/.dev.kappaemme.limitnotch.codex-live.XXXXXX")
 cleanup() {
-    rm -f -- "$temp_binary" "$temp_helper" "$temp_plist" "$temp_helper_plist"
+    rm -f -- "$temp_binary" "$temp_helper" "$temp_codex_helper" "$temp_plist" "$temp_helper_plist" "$temp_codex_plist"
 }
 trap cleanup EXIT
 
 install -m 755 "$source_binary" "$temp_binary"
 install -m 755 "$source_dir/scripts/claude_live.py" "$temp_helper"
+install -m 755 "$source_dir/scripts/codex_live.py" "$temp_codex_helper"
 
 xml() {
     printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
@@ -136,19 +151,55 @@ cat > "$temp_helper_plist" <<PLIST
 PLIST
 plutil -lint "$temp_helper_plist" >/dev/null || fail "Could not create a valid helper LaunchAgent plist."
 
-for running in "$service" "$helper_service"; do
+cat > "$temp_codex_plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$codex_label</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-I</string>
+        <string>$(xml "$codex_helper")</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CODEX_CLI</key><string>$(xml "$codex_cli")</string>
+        <key>PATH</key><string>$(xml "$codex_path")</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardErrorPath</key>
+    <string>$(xml "$install_dir/codex_live.log")</string>
+</dict>
+</plist>
+PLIST
+plutil -lint "$temp_codex_plist" >/dev/null || fail "Could not create a valid Codex helper LaunchAgent plist."
+
+for running in "$service" "$helper_service" "$codex_service"; do
     if launchctl print "$running" >/dev/null 2>&1; then
         launchctl bootout "$running" || fail "Could not stop the existing LaunchAgent $running."
     fi
 done
 mv -f "$temp_binary" "$installed_binary"
 mv -f "$temp_helper" "$helper"
+mv -f "$temp_codex_helper" "$codex_helper"
 mv -f "$temp_plist" "$agent_plist"
 mv -f "$temp_helper_plist" "$helper_plist"
+mv -f "$temp_codex_plist" "$codex_plist"
 launchctl bootstrap "$domain" "$helper_plist" ||
     fail "Could not start the Claude usage helper. Check your macOS GUI session."
+launchctl bootstrap "$domain" "$codex_plist" ||
+    fail "Could not start the Codex usage helper. Check your macOS GUI session."
 launchctl bootstrap "$domain" "$agent_plist" ||
     fail "Could not start the LaunchAgent. Check your macOS GUI session."
 
 printf 'LimitNotch installed and started. It reads %s/.usage-watcher/status.json.\n' "$HOME"
 printf 'Claude usage refreshes every 60 s while you are signed in to Claude Code.\n'
+printf 'Codex usage refreshes every 60 s through the installed Codex CLI.\n'

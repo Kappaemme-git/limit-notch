@@ -5,14 +5,13 @@ import CoreGraphics
 /// `safeAreaInsets.top`, the widths of `auxiliaryTopLeftArea` / `auxiliaryTopRightArea` and
 /// `backingScaleFactor`.
 ///
-/// Collapsed, the black body is exactly the camera housing (same width, height and bottom corner
-/// radius) plus a thin "ear" on each side that holds the mascot and the usage ring.
+/// Collapsed, the black body occupies exactly the camera housing reported by NSScreen.
 public struct NotchGeometry: Equatable, Sendable {
     /// Height of the top-center pill on displays without a notch.
     public static let fallbackPillHeight: CGFloat = 28
     /// Menu bar height assumed when it cannot be measured (for example, when it auto-hides).
     public static let defaultMenuBarHeight: CGFloat = 24
-    /// Space between the notch edge and the ear content.
+    /// Padding used by the fallback pill on displays without a notch.
     public static let earInnerGap: CGFloat = 4
     /// Space between the ear content and the outer edge of the ear, inside the shoulder.
     public static let earOuterPadding: CGFloat = 6
@@ -63,13 +62,13 @@ public struct NotchGeometry: Equatable, Sendable {
         barHeight = max(menuBar, Self.fallbackPillHeight)
     }
 
-    /// Bottom corner radius of the camera housing. macOS does not report it; on every notched
-    /// MacBook it is a quarter of the notch height (8 pt for the 32 pt notch, 9.5 pt at 38 pt).
+    /// The physical corner radius is not exposed by NSScreen. The visually measured lower
+    /// corner is about 8 pt; keep it independent of the safe-area height.
     public var notchCornerRadius: CGFloat {
-        Self.pixelAligned(min(max(barHeight / 4, 6), 12), scale: scale)
+        Self.pixelAligned(8, scale: scale)
     }
 
-    /// Diameter of the mascot and the ring in the collapsed ears: about half the band height.
+    /// Legacy fallback pill sizing on displays without a camera housing.
     public var earContentSize: CGFloat {
         Self.pixelAligned(min(max(barHeight * 0.47, 14), 18), scale: scale)
     }
@@ -83,13 +82,13 @@ public struct NotchGeometry: Equatable, Sendable {
         hasNotch ? notchRect.midX : screenFrame.midX
     }
 
-    /// Width of the black body between the ears: the notch, or a short bridge on plain displays.
+    /// Width of the camera housing, or a short bridge on plain displays.
     public var bodyWidth: CGFloat {
         hasNotch ? notchRect.width : 8
     }
 
     public var collapsedSize: CGSize {
-        CGSize(width: bodyWidth + 2 * earWidth, height: barHeight)
+        hasNotch ? notchSize : CGSize(width: bodyWidth + 2 * earWidth, height: barHeight)
     }
 
     public var expandedSize: CGSize {
@@ -120,7 +119,7 @@ public struct NotchGeometry: Equatable, Sendable {
     public func outline(progress: CGFloat) -> NotchOutline {
         let t = min(max(progress, 0), 1)
         return NotchOutline(
-            topRadius: Self.shoulderRadius + (Self.shoulderRadius * 1.5 - Self.shoulderRadius) * t,
+            topRadius: hasNotch ? Self.shoulderRadius * t : Self.shoulderRadius,
             bottomRadius: notchCornerRadius + (Self.expandedBottomRadius - notchCornerRadius) * t
         )
     }

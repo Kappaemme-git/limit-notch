@@ -22,6 +22,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = StatusStore()
     private let notch = NotchState(geometry: AppDelegate.currentGeometry())
     private var panel: NotchPanel?
+    private var container: NotchContainerView?
     private var pendingShrink: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,11 +43,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
 
-        let hostingView = NotchHostingView(rootView: NotchView(store: store, notch: notch))
-        hostingView.sizingOptions = []
-        hostingView.autoresizingMask = [.width, .height]
-        hostingView.onHoverChange = { [weak self] hovered in self?.notch.setHovered(hovered) }
-        panel.contentView = hostingView
+        let container = NotchContainerView(
+            frame: NSRect(origin: .zero, size: notch.geometry.collapsedSize),
+            drawingSize: notch.geometry.expandedSize,
+            rootView: NotchView(store: store, notch: notch)
+        )
+        container.onHoverChange = { [weak self] hovered in self?.notch.setHovered(hovered) }
+        panel.contentView = container
+        self.container = container
         self.panel = panel
 
         notch.onExpansionChange = { [weak self] expanded in self?.expansionChanged(expanded) }
@@ -56,8 +60,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(screenConfigurationChanged),
                            name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        center.addObserver(self, selector: #selector(occlusionChanged),
-                           name: NSWindow.didChangeOcclusionStateNotification, object: panel)
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(self, selector: #selector(screensDidSleep),
                               name: NSWorkspace.screensDidSleepNotification, object: nil)
@@ -68,6 +70,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private func expansionChanged(_ expanded: Bool) {
         pendingShrink?.cancel()
         if expanded {
+            notch.isAnimating = true
             store.refresh()
             setPanelFrame(expanded: true)
         } else {
@@ -86,12 +89,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screenConfigurationChanged(_ notification: Notification) {
         notch.update(geometry: Self.currentGeometry())
+        container?.drawingSize = notch.geometry.expandedSize
         setPanelFrame(expanded: notch.isExpanded)
-    }
-
-    @objc private func occlusionChanged(_ notification: Notification) {
-        guard let panel else { return }
-        notch.isAnimating = panel.occlusionState.contains(.visible)
     }
 
     @objc private func screensDidSleep(_ notification: Notification) {
@@ -99,7 +98,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func screensDidWake(_ notification: Notification) {
-        notch.isAnimating = panel?.occlusionState.contains(.visible) ?? true
+        notch.isAnimating = true
     }
 
     /// Prefers the notched built-in display, then any built-in display, then the main screen.
@@ -134,11 +133,36 @@ private extension NSScreen {
     }
 }
 
-/// Tracks hover with `.activeAlways`, which keeps working while LimitNotch is not the active app.
-/// The window always matches the visible notch shape at rest, so its bounds are the hover zone.
-private final class NotchHostingView<Content: View>: NSHostingView<Content> {
+/// Clips a constant-size SwiftUI surface to the panel's actual window bounds. The mascot and
+/// content never relayout as the panel switches between the two window frames.
+private final class NotchContainerView: NSView {
     var onHoverChange: ((Bool) -> Void)?
     private var hoverArea: NSTrackingArea?
+    private let hostingView: NSHostingView<NotchView>
+    var drawingSize: CGSize {
+        didSet { needsLayout = true }
+    }
+
+    init(frame: NSRect, drawingSize: CGSize, rootView: NotchView) {
+        self.drawingSize = drawingSize
+        hostingView = NSHostingView(rootView: rootView)
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        autoresizingMask = [.width, .height]
+        hostingView.sizingOptions = []
+        addSubview(hostingView)
+        needsLayout = true
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        hostingView.frame = NSRect(x: (bounds.width - drawingSize.width) / 2, y: 0,
+                                   width: drawingSize.width, height: drawingSize.height)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

@@ -29,9 +29,11 @@ public struct ClaudeAppUsage: Equatable, Sendable {
 public struct UsageStatus: Equatable, Sendable {
     public let claude5h: Double?
     public let claude7d: Double?
+    public let codex5h: Double?
     public let codex7d: Double?
     public let claude5hResetsAt: Date?
     public let claude7dResetsAt: Date?
+    public let codex5hResetsAt: Date?
     public let codex7dResetsAt: Date?
     public let claudeDataAt: Date?
     public let claudeSource: String?
@@ -41,8 +43,14 @@ public struct UsageStatus: Equatable, Sendable {
     public let mood: UsageMood?
     public let note: String?
     public let updatedAt: Date?
+    public let forecastWillHitLimit: Bool
 
     public var creatureState: CreatureState? {
+        if let peak = [claude5h, claude7d, codex5h, codex7d].compactMap({ $0 }).max() {
+            if peak >= 85 { return .panic }
+            if peak >= 60 || forecastWillHitLimit { return .worried }
+            return .happy
+        }
         if let mood {
             switch mood {
             case .happy: return .happy
@@ -136,10 +144,10 @@ extension UsageStatus {
         guard let live else { return status }
         if let existing = status?.claudeDataAt, existing >= live.dataAt { return status }
         let codex = status?.codex7d
-        let peak = [live.fiveHour, live.sevenDay, codex].compactMap { $0 }.max() ?? 0
+        let peak = [live.fiveHour, live.sevenDay, status?.codex5h, codex].compactMap { $0 }.max() ?? 0
         let level: UsageLevel
         switch UsageTone(percent: peak) {
-        case .normal: level = .ok
+        case .normal: level = status?.forecastWillHitLimit == true ? .warn : .ok
         case .high: level = .warn
         case .critical: level = .crit
         }
@@ -147,9 +155,11 @@ extension UsageStatus {
         return UsageStatus(
             claude5h: live.fiveHour,
             claude7d: live.sevenDay,
+            codex5h: status?.codex5h,
             codex7d: codex,
             claude5hResetsAt: live.fiveHourResetsAt,
             claude7dResetsAt: live.sevenDayResetsAt,
+            codex5hResetsAt: status?.codex5hResetsAt,
             codex7dResetsAt: status?.codex7dResetsAt,
             claudeDataAt: live.dataAt,
             claudeSource: live.source,
@@ -158,7 +168,8 @@ extension UsageStatus {
             level: level,
             mood: nil,
             note: nil,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            forecastWillHitLimit: status?.forecastWillHitLimit ?? false
         )
     }
 }
@@ -199,9 +210,11 @@ public enum UsageStatusParser {
         return UsageStatus(
             claude5h: percentage(from: object["claude_5h"]),
             claude7d: percentage(from: object["claude_7d"]),
+            codex5h: percentage(from: object["codex_5h"]),
             codex7d: percentage(from: object["codex_7d"]),
             claude5hResetsAt: unixSeconds(from: object["claude_5h_resets_at"]),
             claude7dResetsAt: unixSeconds(from: object["claude_7d_resets_at"]),
+            codex5hResetsAt: unixSeconds(from: object["codex_5h_resets_at"]),
             codex7dResetsAt: unixSeconds(from: object["codex_7d_resets_at"]),
             claudeDataAt: date(from: object["claude_data_at"]),
             claudeSource: (object["claude_source"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
@@ -216,7 +229,10 @@ public enum UsageStatusParser {
             level: level,
             mood: mood,
             note: (object["note"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            updatedAt: isoDate(from: object["updated_at"])
+            updatedAt: isoDate(from: object["updated_at"]),
+            forecastWillHitLimit: ["claude_5h_forecast_100", "claude_7d_forecast_100",
+                                   "codex_5h_forecast_100", "codex_7d_forecast_100"]
+                .contains { object[$0] as? Bool == true }
         )
     }
 

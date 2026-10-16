@@ -16,6 +16,7 @@ claude_* fields of ~/.usage-watcher/status.json, leaving the other fields alone.
 """
 
 import json
+import fcntl
 import os
 import subprocess
 import sys
@@ -237,9 +238,9 @@ def level_for(values):
     peak = max((v for v in values if v is not None), default=None)
     if peak is None:
         return None, None
-    if peak >= 90:
+    if peak >= 85:
         return "crit", "panic"
-    if peak >= 70:
+    if peak >= 60:
         return "warn", "worried"
     return "ok", "happy"
 
@@ -265,10 +266,31 @@ def merge_status(status, live, at):
     existing = parse_time(status.get("claude_data_at"))
     if existing is not None and existing > live["claude_data_at"]:
         return None
+    for prefix, value_key, reset_key in (
+        ("claude_5h", "claude_5h", "claude_5h_resets_at"),
+        ("claude_7d", "claude_7d", "claude_7d_resets_at"),
+    ):
+        old_value, new_value = status.get(value_key), live.get(value_key)
+        old_reset, new_reset = status.get(reset_key), live.get(reset_key)
+        elapsed = live["claude_data_at"] - existing if existing is not None else 0
+        status[prefix + "_forecast_100"] = bool(
+            isinstance(old_value, (int, float)) and not isinstance(old_value, bool)
+            and isinstance(new_value, (int, float)) and not isinstance(new_value, bool)
+            and elapsed >= 300 and isinstance(old_reset, (int, float))
+            and isinstance(new_reset, (int, float)) and abs(old_reset - new_reset) <= 5
+            and new_reset is not None and new_reset > live["claude_data_at"]
+            and new_value > old_value
+            and new_value + (new_value - old_value) / elapsed
+            * (new_reset - live["claude_data_at"]) >= 100)
     for key in CLAUDE_KEYS:
         status[key] = live.get(key)
     status["claude_data_at"] = iso(live["claude_data_at"])
-    level, mood = level_for([status.get("claude_5h"), status.get("claude_7d"), status.get("codex_7d")])
+    level, mood = level_for([status.get("claude_5h"), status.get("claude_7d"),
+                             status.get("codex_5h"), status.get("codex_7d")])
+    if level == "ok" and any(status.get(key) is True for key in (
+            "claude_5h_forecast_100", "claude_7d_forecast_100",
+            "codex_5h_forecast_100", "codex_7d_forecast_100")):
+        level, mood = "warn", "worried"
     if level:
         status["level"], status["mood"] = level, mood
         status["note"] = note_for(status)
@@ -327,9 +349,11 @@ def run(fetch=fetch_oauth_usage, at=None, verbose=False):
     write_json(live_path, state)
 
     status_path = directory / "status.json"
-    merged = merge_status(read_json(status_path), best, at)
-    if merged is not None:
-        write_json(status_path, merged)
+    with (directory / ".status.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        merged = merge_status(read_json(status_path), best, at)
+        if merged is not None:
+            write_json(status_path, merged)
 
     if verbose:
         print(json.dumps({"reading": best, "error": error}, indent=2))

@@ -24,18 +24,16 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertEqual(geometry.bodyWidth, 179)
     }
 
-    func testCollapsedPanelHasNotchHeightAndOnlyThinEars() {
+    func testCollapsedPanelMatchesHardwareWithoutEars() {
         let geometry = notched()
         let collapsed = geometry.panelFrame(expanded: false)
         // Exactly as tall as the notch, flush with the top edge.
         XCTAssertEqual(collapsed.height, geometry.notchRect.height)
         XCTAssertEqual(collapsed.maxY, geometry.notchRect.maxY)
-        // The notch sits exactly in the middle; each ear is a thin strip beside it.
+        // Every collapsed edge aligns with the reported camera housing.
         XCTAssertEqual(collapsed.midX, geometry.notchRect.midX, accuracy: 0.001)
-        XCTAssertEqual(geometry.notchRect.minX - collapsed.minX, geometry.earWidth, accuracy: 0.001)
-        XCTAssertEqual(collapsed.maxX - geometry.notchRect.maxX, geometry.earWidth, accuracy: 0.001)
-        XCTAssertLessThanOrEqual(geometry.earWidth, 30)
-        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 179 + 2 * geometry.earWidth, height: 32))
+        XCTAssertEqual(collapsed, geometry.notchRect)
+        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 179, height: 32))
     }
 
     func testEarContentFitsBesideTheNotch() {
@@ -55,10 +53,10 @@ final class NotchGeometryTests: XCTestCase {
 
     func testCornerRadiusFollowsTheHardwareNotch() {
         XCTAssertEqual(notched().notchCornerRadius, 8)
-        XCTAssertEqual(notched(top: 38).notchCornerRadius, 9.5)
+        XCTAssertEqual(notched(top: 38).notchCornerRadius, 8)
         let collapsed = notched().outline(progress: 0)
         XCTAssertEqual(collapsed.bottomRadius, 8)
-        XCTAssertEqual(collapsed.topRadius, NotchGeometry.shoulderRadius)
+        XCTAssertEqual(collapsed.topRadius, 0)
         let expanded = notched().outline(progress: 1)
         XCTAssertEqual(expanded.bottomRadius, NotchGeometry.expandedBottomRadius)
         // Halfway through the spring the radius is halfway between the two shapes.

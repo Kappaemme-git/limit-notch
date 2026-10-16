@@ -45,7 +45,23 @@ final class UsageStatusTests: XCTestCase {
         XCTAssertEqual(status.level, .crit)
         XCTAssertEqual(status.mood, .happy)
         XCTAssertEqual(StatusSnapshot.from(data: data, at: now), .current(status))
-        XCTAssertEqual(StatusSnapshot.from(data: data, at: now).creatureState, .happy)
+        XCTAssertEqual(StatusSnapshot.from(data: data, at: now).creatureState, .worried)
+
+    }
+
+    func testThresholdsAndForecastUseTheHighestWindow() {
+        let updated = iso(now)
+        for (claude, codex5h, codex7d, forecast, expected) in [
+            (59.0, 10.0, 10.0, false, CreatureState.happy),
+            (68.0, 10.0, 10.0, false, .worried),
+            (10.0, 84.0, 10.0, false, .worried),
+            (10.0, 10.0, 85.0, false, .panic),
+            (10.0, 85.0, 10.0, false, .panic),
+            (30.0, 10.0, 10.0, true, .worried),
+        ] {
+            let json = "{\"claude_5h\":\(claude),\"codex_5h\":\(codex5h),\"codex_7d\":\(codex7d),\"claude_5h_forecast_100\":\(forecast),\"level\":\"ok\",\"mood\":\"happy\",\"updated_at\":\"\(updated)\"}"
+            XCTAssertEqual(StatusSnapshot.from(data: Data(json.utf8), at: now).creatureState, expected)
+        }
     }
 
     func testMoodPrecedenceAndLevelFallbackForEveryState() {
