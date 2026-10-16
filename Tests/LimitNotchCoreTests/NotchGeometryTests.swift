@@ -159,11 +159,11 @@ final class NotchGeometryTests: XCTestCase {
     }
 
     func testExpandedPanelNeverExceedsANarrowScreen() {
-        let frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+        let frame = CGRect(x: 0, y: 0, width: 360, height: 300)
         let geometry = NotchGeometry(screenFrame: frame, visibleFrame: frame, safeAreaTop: 0,
                                      auxiliaryTopLeftWidth: nil, auxiliaryTopRightWidth: nil)
         let panel = geometry.panelFrame(expanded: true)
-        XCTAssertEqual(panel.width, 400 - 2 * NotchGeometry.screenMargin)
+        XCTAssertEqual(panel.width, 360 - 2 * NotchGeometry.screenMargin)
         XCTAssertGreaterThanOrEqual(panel.minX, frame.minX)
         XCTAssertLessThanOrEqual(panel.maxX, frame.maxX)
     }

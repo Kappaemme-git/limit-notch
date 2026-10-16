@@ -18,11 +18,11 @@ public struct NotchGeometry: Equatable, Sendable {
     /// Concave flare where the panel meets the top edge, matching the display's rounded corners
     /// beside the camera housing.
     public static let shoulderRadius: CGFloat = 4
-    /// Height of the usage area below the notch band when expanded.
-    public static let expandedContentHeight: CGFloat = 128
-    public static let minimumExpandedWidth: CGFloat = 400
-    /// Room on each side of the notch for the expanded header text.
-    public static let expandedSideWidth: CGFloat = 110
+    /// Height of the glance area below the notch band when expanded.
+    public static let expandedContentHeight: CGFloat = 92
+    public static let minimumExpandedWidth: CGFloat = 380
+    /// Minimum black margin on each side of the camera housing when expanded.
+    public static let expandedSideWidth: CGFloat = 90
     public static let expandedBottomRadius: CGFloat = 22
     public static let screenMargin: CGFloat = 8
 

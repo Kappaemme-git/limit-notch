@@ -9,25 +9,22 @@ struct NotchView: View {
     @ObservedObject var notch: NotchState
 
     private enum Metrics {
-        static let expandedMascot: CGFloat = 40
         static let inset: CGFloat = 20
+        static let mascot: CGFloat = 44
         static let mascotGap: CGFloat = 14
-        static let rowSpacing: CGFloat = 8
+        static let ring: CGFloat = 40
+        /// The row holding the mascot, the hero text and the ring, just below the notch band.
+        static let heroRow: CGFloat = 44
+        static let topPadding: CGFloat = 8
     }
 
     private var geometry: NotchGeometry { notch.geometry }
     private var expanded: Bool { notch.isExpanded }
-    private var status: UsageStatus? { store.snapshot.status }
-    private var isCurrent: Bool {
-        if case .current = store.snapshot { return true }
-        return false
-    }
+    private var glance: UsageGlance { UsageGlance(store.snapshot) }
 
     private var mascotCenter: CGPoint {
-        CGPoint(
-            x: Metrics.inset + Metrics.expandedMascot / 2,
-            y: geometry.barHeight + (NotchGeometry.expandedContentHeight - 12) / 2
-        )
+        CGPoint(x: Metrics.inset + Metrics.mascot / 2,
+                y: geometry.barHeight + Metrics.topPadding + Metrics.heroRow / 2)
     }
 
     var body: some View {
@@ -57,9 +54,9 @@ struct NotchView: View {
             }
 
             if expanded {
-                MascotView(state: store.snapshot.creatureState, diameter: Metrics.expandedMascot,
+                MascotView(state: store.snapshot.creatureState, diameter: Metrics.mascot,
                            isAnimating: notch.isAnimating)
-                    .frame(width: Metrics.expandedMascot * 2, height: Metrics.expandedMascot * 2)
+                    .frame(width: Metrics.mascot * 2, height: Metrics.mascot * 2)
                     .position(mascotCenter)
                     .transition(.opacity.animation(.easeOut(duration: 0.18).delay(0.1)))
             }
@@ -68,116 +65,83 @@ struct NotchView: View {
         .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
     }
 
-    // MARK: - Expanded panel
+    // MARK: - Expanded glance
 
+    /// Mascot on the left, one hero line with a plain-English status in the middle, a single ring
+    /// on the right, and the other windows in a quiet row underneath.
     private var expandedContent: some View {
+        let glance = self.glance
         let full = geometry.expandedSize
-        let sideWidth = (full.width - geometry.bodyWidth) / 2
-        return TimelineView(.periodic(from: .now, by: 5)) { timeline in
-            VStack(alignment: .leading, spacing: 0) {
-                header(sideWidth: sideWidth)
-                    .frame(height: geometry.barHeight)
-
-                VStack(alignment: .leading, spacing: Metrics.rowSpacing) {
-                    UsageRow(label: "Claude · 5h", value: status?.claude5h, resetsAt: status?.claude5hResetsAt,
-                             dimmed: !isCurrent, now: timeline.date)
-                    UsageRow(label: "Claude · week", value: status?.claude7d, resetsAt: status?.claude7dResetsAt,
-                             dimmed: !isCurrent, now: timeline.date)
-                    if status?.codex5h != nil {
-                        UsageRow(label: "Codex · 5h", value: status?.codex5h, resetsAt: status?.codex5hResetsAt,
-                                 dimmed: !isCurrent, now: timeline.date)
+        return TimelineView(.periodic(from: .now, by: 15)) { timeline in
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        heroLine(glance)
+                        Text(glance.message(now: timeline.date))
+                            .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.55))
                     }
-                    UsageRow(label: "Codex · week", value: status?.codex7d, resetsAt: status?.codex7dResetsAt,
-                             dimmed: !isCurrent, now: timeline.date)
-                    Text(footerText(now: timeline.date))
-                        .font(.system(size: 10, weight: .regular, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.38))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .padding(.top, -1)
+                    Spacer(minLength: 0)
+                    UsageRing(value: glance.hero?.percent, color: levelColor(glance))
+                        .frame(width: Metrics.ring, height: Metrics.ring)
                 }
-                .padding(.top, 9)
-                .padding(.leading, Metrics.inset + Metrics.expandedMascot + Metrics.mascotGap)
-                .padding(.trailing, Metrics.inset)
+                .frame(height: Metrics.heroRow)
+
+                if !glance.others.isEmpty {
+                    secondaryRow(glance.others)
+                }
             }
+            .lineLimit(1)
+            .padding(.top, geometry.barHeight + Metrics.topPadding)
+            .padding(.leading, Metrics.inset + Metrics.mascot + Metrics.mascotGap)
+            .padding(.trailing, Metrics.inset)
         }
         .frame(width: full.width, height: full.height, alignment: .topLeading)
     }
 
-    /// Title and mood on either side of the camera housing.
-    private func header(sideWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            Text("LimitNotch")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.92))
-                .padding(.leading, Metrics.inset)
-                .frame(width: sideWidth, alignment: .leading)
-            Spacer(minLength: 0)
-            HStack(spacing: 5) {
-                Circle().fill(moodColor).frame(width: 6, height: 6)
-                Text(statusTitle)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(moodColor)
+    private func heroLine(_ glance: UsageGlance) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(glance.hero?.title ?? "No data")
+            if let hero = glance.hero {
+                Text(UsageFormatting.percent(hero.percent))
+                    .monospacedDigit()
+                    .numericTransition(hero.percent)
             }
-            .padding(.trailing, Metrics.inset)
-            .frame(width: sideWidth, alignment: .trailing)
         }
-        .lineLimit(1)
+        .font(.system(size: 20, weight: .semibold, design: .rounded))
+        .foregroundStyle(.white.opacity(glance.isCurrent ? 0.95 : 0.6))
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
     }
 
-    // MARK: - Text
-
-    private var statusTitle: String {
-        switch store.snapshot {
-        case .current:
-            switch store.snapshot.creatureState {
-            case .happy: return "All good"
-            case .worried: return "Getting close"
-            case .panic: return "Near limit"
-            case .sleeping: return "Asleep"
+    private func secondaryRow(_ windows: [UsageWindow]) -> some View {
+        HStack(spacing: 14) {
+            ForEach(windows, id: \.title) { window in
+                HStack(spacing: 4) {
+                    Text(window.title)
+                    Text(UsageFormatting.percent(window.percent))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
             }
-        case .stale: return "Asleep"
-        case .unavailable: return "No data"
         }
+        .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
+        .foregroundStyle(.white.opacity(0.36))
     }
 
-    private func footerText(now: Date) -> String {
-        switch store.snapshot {
-        case .current(let status):
-            let age = UsageFormatting.age(status.claudeDataAt ?? status.updatedAt, now: now)
-            let updated = "Updated \(age)"
-            return UsageFormatting.sourceLabel(status.claudeSource).map { "\(updated) · \($0)" } ?? updated
-        case .stale(let status):
-            return "Data is over 1h old · updated \(UsageFormatting.age(status.updatedAt, now: now))"
-        case .unavailable(nil):
-            return "Waiting for ~/.usage-watcher/status.json"
-        case .unavailable:
-            return "status.json has no valid updated_at, mood or level"
-        }
-    }
-
-    private var moodColor: Color {
-        guard isCurrent else { return Color(white: 0.6) }
-        switch store.snapshot.creatureState {
-        case .happy: return Palette.green
-        case .worried: return Palette.yellow
-        case .panic: return Palette.red
-        case .sleeping: return Color(white: 0.6)
-        }
+    /// Color is reserved for the level of the hero window; old data is grey.
+    private func levelColor(_ glance: UsageGlance) -> Color {
+        guard glance.isCurrent, let hero = glance.hero else { return Color(white: 0.5) }
+        return Palette.color(for: hero.tone)
     }
 
     private var accessibilitySummary: String {
-        let usage = [
-            "Claude 5 hours \(UsageFormatting.percent(status?.claude5h))",
-            "Claude week \(UsageFormatting.percent(status?.claude7d))",
-            "Codex 5 hours \(UsageFormatting.percent(status?.codex5h))",
-            "Codex week \(UsageFormatting.percent(status?.codex7d))"
-        ].joined(separator: ", ")
-        return "LimitNotch: \(statusTitle). \(usage)"
+        let glance = self.glance
+        let line = { (window: UsageWindow) in "\(window.title) \(UsageFormatting.percent(window.percent))" }
+        let parts = [glance.hero.map(line) ?? "No data", glance.message(now: Date())] + glance.others.map(line)
+        return "LimitNotch: " + parts.joined(separator: ". ")
     }
 }
 
-/// Apple's dark-mode system colors, so the bars read like native UI.
+/// Apple's dark-mode system colors, so the ring reads like native UI.
 enum Palette {
     static let green = Color(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255)
     static let yellow = Color(red: 0xFF / 255, green: 0xD6 / 255, blue: 0x0A / 255)
@@ -213,53 +177,28 @@ private struct NotchBody: Shape {
     }
 }
 
-private struct UsageRow: View {
-    let label: String
+/// A single progress ring for the hero window. It sweeps in from empty each time the notch opens.
+private struct UsageRing: View {
     let value: Double?
-    let resetsAt: Date?
-    let dimmed: Bool
-    let now: Date
+    let color: Color
+    @State private var appeared = false
+
+    private static let lineWidth: CGFloat = 5
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(label)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.72))
-                Spacer(minLength: 4)
-                Text(resetsAt == nil ? "" : "resets \(UsageFormatting.reset(resetsAt, now: now))")
-                    .font(.system(size: 10, weight: .regular, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.4))
-                    .help(resetsAt.map { "Resets \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
-                Text(UsageFormatting.percent(value))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(.white.opacity(value == nil ? 0.35 : 0.95))
-                    .numericTransition(value)
-                    .frame(minWidth: 34, alignment: .trailing)
-            }
-            .lineLimit(1)
-            UsageBar(value: value, dimmed: dimmed)
-                .frame(height: 5)
+        let fraction = appeared ? min(max(value ?? 0, 0), 100) / 100 : 0
+        ZStack {
+            Circle().stroke(.white.opacity(0.12), lineWidth: Self.lineWidth)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
         }
-        .animation(.spring(response: 0.6, dampingFraction: 0.85), value: value)
-    }
-}
-
-private struct UsageBar: View {
-    let value: Double?
-    let dimmed: Bool
-
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.1))
-                if let value {
-                    let color = dimmed ? Color(white: 0.55) : Palette.color(for: UsageTone(percent: value))
-                    Capsule()
-                        .fill(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: max(proxy.size.width * min(value, 100) / 100, value > 0 ? 5 : 0))
-                }
-            }
+        .padding(Self.lineWidth / 2)
+        .animation(.spring(response: 0.7, dampingFraction: 0.86), value: fraction)
+        .animation(.easeInOut(duration: 0.3), value: color)
+        .onAppear {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.86).delay(0.1)) { appeared = true }
         }
     }
 }
