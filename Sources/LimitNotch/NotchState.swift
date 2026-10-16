@@ -18,7 +18,7 @@ final class NotchState: ObservableObject {
 
     @Published private(set) var geometry: NotchGeometry
     @Published private(set) var isExpanded = false
-    /// False while the display sleeps or the panel is hidden, so the mood glyph stops blinking.
+    /// False while the display sleeps or the panel is hidden, so the eyes stop blinking and trembling.
     @Published var isAnimating = true
 
     /// Called with the new expansion state before SwiftUI animates it.

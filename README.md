@@ -2,18 +2,18 @@
 
 LimitNotch lives in the MacBook notch. It reads `~/.usage-watcher/status.json` and `claude_live.json` the moment either file changes (a DispatchSource watches the directory and both files), and once a minute so old data turns grey. The app itself does not use the network, API keys, or external dependencies.
 
-Collapsed, the black shape is exactly the camera housing plus a tiny 36 pt ear on each side: 251 × 32 pt around the 179 pt notch of a 13" MacBook Air. The left ear holds the mood glyph, an 11 pt disc with the mascot's two eyes; the right ear holds only the percentage. The housing's width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`.
+The notch is the bot's face. Collapsed, the black shape is exactly the camera housing plus a narrow 20 pt ear on each side, 219 × 32 pt around the 179 pt notch of a 13" MacBook Air, and each ear holds one big eye. There is no text. The housing's width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`.
 
-Hover springs the shape open into a 300 × 108 pt island (wider notches keep 60 pt on each side). The outline morphs continuously, with smooth (continuous-curvature) corners. The island shows one big number for the selected service, its window and reset time on one line (for example "Claude · Resets in 1h 52m"), and a small **Auto | Claude | Codex** switch. The switch is remembered in UserDefaults, and clicking it never activates the app. Auto shows the most critical window. The glyph glides from the ear to the start of that line. The number is white below 60%, yellow from 60% to 84%, red from 85%, and grey when the data is stale. The drawing surface has a fixed size, so the shape morph does no layout work, and SwiftUI animates it at the display's refresh rate, up to 120 Hz. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
+Hover opens the mouth: the shape springs downward into a 260 × 138 pt island (wider notches keep 40 pt on each side), with an outline that morphs continuously and smooth (continuous-curvature) corners. The eyes stay at the top and glance down at one big number for the selected service. Below the number are its window and reset time (for example "Claude · Resets in 1h 52m") and a small **Auto | Claude | Codex** switch. The switch is remembered in UserDefaults, and clicking it never activates the app. Auto shows the most critical window. The number is white below 60%, yellow from 60% to 84%, red from 85%, and grey when the data is stale. The drawing surface has a fixed size, so the shape morph does no layout work, and SwiftUI animates it at the display's refresh rate, up to 120 Hz. On displays without a notch the face becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
 
-The glyph's color follows the selected service (on Auto, the highest window, including a forecast that reaches 100% before reset). It blinks every few seconds and otherwise stays still:
+The eyes follow the selected service (on Auto, the highest window, including a forecast that reaches 100% before reset). They spring between expressions:
 
-| Status | Glyph |
+| Status | Eyes |
 | --- | --- |
-| `happy` / `ok` | Blue |
-| `worried` / `warn` | Yellow |
-| `panic` / `crit` | Red, with a soft glow |
-| missing, invalid, or no sync for 30 minutes | Grey, eyes closed |
+| `happy` / `ok` | Blue, round, a slow blink every few seconds |
+| `worried` / `warn` | Yellow, outer lids drooping, glancing left and right |
+| `panic` / `crit` | Red, wide open with a glow, trembling |
+| missing, invalid, or no sync for 30 minutes | Grey, closed into curved lines |
 
 To preview a mood without real data, start the binary with `LIMITNOTCH_DEBUG_MOOD=happy|worried|panic|sleep`; add `LIMITNOTCH_DEBUG_EXPANDED=1` to keep the island open.
 

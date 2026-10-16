@@ -5,29 +5,29 @@ import CoreGraphics
 /// `safeAreaInsets.top`, the widths of `auxiliaryTopLeftArea` / `auxiliaryTopRightArea` and
 /// `backingScaleFactor`.
 ///
-/// Collapsed, the black body is exactly the camera housing reported by NSScreen plus a tiny ear on
-/// each side (the mood glyph on the left, the percentage on the right), so both stay visible
-/// beside the camera: 251 × 32 pt around a 179 pt notch, opening into a 300 × 108 pt island.
+/// Collapsed, the black body is exactly the camera housing reported by NSScreen plus a narrow ear
+/// on each side, each holding one of the bot's eyes, so the notch reads as a face: 219 × 32 pt
+/// around a 179 pt notch. Hover opens its "mouth" downward into a 260 × 138 pt island.
 public struct NotchGeometry: Equatable, Sendable {
     /// Height of the top-center pill on displays without a notch.
     public static let fallbackPillHeight: CGFloat = 28
     /// Menu bar height assumed when it cannot be measured (for example, when it auto-hides).
     public static let defaultMenuBarHeight: CGFloat = 24
-    /// Width of each ear beside the camera housing; "100%" still fits between the edges.
-    public static let earWidth: CGFloat = 36
-    /// Diameter of the mood glyph in the left ear.
-    public static let glyphDiameter: CGFloat = 11
+    /// Width of each ear beside the camera housing: one eye plus a hairline of black around it.
+    public static let earWidth: CGFloat = 20
+    /// The box every eye expression fits in, centered in its ear.
+    public static let eyeBox = CGSize(width: 16, height: 22)
     /// Concave flare where the body meets the top edge, outside the body on each side.
     public static let collapsedShoulder: CGFloat = 6
     public static let expandedShoulder: CGFloat = 10
     public static let collapsedBottomRadius: CGFloat = 10
-    public static let expandedBottomRadius: CGFloat = 24
-    /// Height of the glance area below the notch band when expanded.
-    public static let expandedContentHeight: CGFloat = 76
+    public static let expandedBottomRadius: CGFloat = 28
+    /// Height of the mouth below the notch band when expanded.
+    public static let expandedContentHeight: CGFloat = 106
     /// Narrowest expanded body, without the shoulders.
-    public static let minimumExpandedWidth: CGFloat = 300
+    public static let minimumExpandedWidth: CGFloat = 260
     /// Minimum black margin on each side of the camera housing when expanded.
-    public static let expandedSideWidth: CGFloat = 60
+    public static let expandedSideWidth: CGFloat = 40
     /// Bridge between the ears on displays without a notch.
     public static let fallbackBridgeWidth: CGFloat = 8
     public static let screenMargin: CGFloat = 8
@@ -97,8 +97,7 @@ public struct NotchGeometry: Equatable, Sendable {
                height: barHeight + Self.expandedContentHeight)
     }
 
-    /// Centers of the left ear (mood glyph) and right ear (percentage), relative to the collapsed
-    /// panel's left edge and top.
+    /// Centers of the left and right eyes, relative to the collapsed panel's left edge and top.
     public var leftEarCenter: CGPoint {
         CGPoint(x: Self.collapsedShoulder + Self.earWidth / 2, y: barHeight / 2)
     }

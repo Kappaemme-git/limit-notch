@@ -2,32 +2,30 @@ import AppKit
 import LimitNotchCore
 import SwiftUI
 
-/// The fixed-size drawing surface prevents layout work during the silhouette spring. The panel
-/// window clips it to the collapsed notch and ears, or to the expanded island.
+/// The notch is the bot's face: collapsed, the black shape is the camera housing with an eye in
+/// each ear. Hovering opens the mouth, which shows the number, its reset time and the service
+/// switch. The fixed-size drawing surface prevents layout work during the silhouette spring; the
+/// panel window clips it to the collapsed face or to the open mouth.
 struct NotchView: View {
     @ObservedObject var store: StatusStore
     @ObservedObject var notch: NotchState
     @AppStorage("serviceSelection") private var selection: ServiceSelection = .auto
     @Namespace private var pill
 
-    /// Offsets inside the expanded body; vertical ones are measured from the bottom of the notch band.
+    /// Heights inside the mouth, from the bottom of the notch band down.
     private enum Metrics {
-        static let inset: CGFloat = 20
-        static let switchTrailing: CGFloat = 16
-        static let numberTop: CGFloat = 0
-        static let numberHeight: CGFloat = 44
+        static let numberTop: CGFloat = 4
+        static let numberHeight: CGFloat = 42
         static let subtitleHeight: CGFloat = 14
-        /// Space between the glyph and the subtitle it leads.
-        static let glyphGap: CGFloat = 6
+        static let switchGap: CGFloat = 10
     }
 
     private var geometry: NotchGeometry { notch.geometry }
     private var expanded: Bool { notch.isExpanded }
     private var surface: CGSize { geometry.expandedSize }
     private var bar: CGFloat { geometry.barHeight }
-    /// Left edges of the collapsed panel and of the expanded body within the drawing surface.
+    /// Left edge of the collapsed panel within the drawing surface.
     private var collapsedOrigin: CGFloat { (surface.width - geometry.collapsedSize.width) / 2 }
-    private var expandedLeft: CGFloat { NotchGeometry.expandedShoulder }
 
     var body: some View {
         let glance = UsageGlance(store.snapshot, selection: selection)
@@ -35,10 +33,8 @@ struct NotchView: View {
             NotchBody(geometry: geometry, progress: expanded ? 1 : 0)
                 .fill(Color.black)
 
-            earPercent(glance)
-
             if expanded {
-                expandedContent(glance)
+                mouth(glance)
                     .transition(.asymmetric(
                         insertion: .modifier(active: Reveal(hidden: true), identity: Reveal(hidden: false))
                             .animation(.spring(response: 0.34, dampingFraction: 0.86).delay(0.06)),
@@ -46,7 +42,13 @@ struct NotchView: View {
                     ))
             }
 
-            glyph(glance)
+            BotEyes(mood: glance.mood,
+                    left: offsetByOrigin(geometry.leftEarCenter),
+                    right: offsetByOrigin(geometry.rightEarCenter),
+                    isAnimating: notch.isAnimating,
+                    isLookingDown: expanded)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .frame(width: surface.width, height: surface.height, alignment: .topLeading)
         .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
@@ -60,63 +62,31 @@ struct NotchView: View {
         .accessibilityHint("Hover to view usage and reset times")
     }
 
-    // MARK: - Ears
-
-    /// The percentage centered in the right ear; it fades out as the island opens and back in
-    /// once the body is nearly closed.
-    private func earPercent(_ glance: UsageGlance) -> some View {
-        PercentText(value: glance.hero?.percent, size: 12, unitSize: 9)
-            .foregroundStyle(numberColor(glance))
-            .fixedSize()
-            .position(x: collapsedOrigin + geometry.rightEarCenter.x, y: geometry.rightEarCenter.y)
-            .opacity(expanded ? 0 : 1)
-            .animation(expanded ? .easeOut(duration: 0.08) : .easeOut(duration: 0.18).delay(0.12), value: expanded)
-            .animation(.easeInOut(duration: 0.4), value: glance.hero)
-            .allowsHitTesting(false)
+    private func offsetByOrigin(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: collapsedOrigin + point.x, y: point.y)
     }
 
-    /// The mood glyph glides from the left ear to the start of the subtitle as the body opens.
-    private func glyph(_ glance: UsageGlance) -> some View {
-        let center = expanded
-            ? CGPoint(x: expandedLeft + Metrics.inset + NotchGeometry.glyphDiameter / 2,
-                      y: bar + Metrics.numberTop + Metrics.numberHeight + Metrics.subtitleHeight / 2)
-            : CGPoint(x: collapsedOrigin + geometry.leftEarCenter.x, y: geometry.leftEarCenter.y)
-        return MoodGlyph(mood: glance.mood, isAnimating: notch.isAnimating)
-            .frame(width: NotchGeometry.glyphDiameter, height: NotchGeometry.glyphDiameter)
-            .position(center)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
+    // MARK: - Mouth
 
-    // MARK: - Expanded island
-
-    /// One big number with its window and reset time underneath (after the glyph), and the
-    /// service switch.
-    private func expandedContent(_ glance: UsageGlance) -> some View {
-        let top = bar + Metrics.numberTop
-        return ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 0) {
-                PercentText(value: glance.hero?.percent, size: 36, unitSize: 20)
-                    .foregroundStyle(numberColor(glance))
-                    .frame(height: Metrics.numberHeight)
-                TimelineView(.periodic(from: .now, by: 15)) { timeline in
-                    Text(subtitle(glance, now: timeline.date))
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundStyle(Palette.secondaryText)
-                        .lineLimit(1)
-                        .frame(height: Metrics.subtitleHeight)
-                }
-                .padding(.leading, NotchGeometry.glyphDiameter + Metrics.glyphGap)
+    /// The number, its window and reset time, and the service switch, centered under the eyes.
+    private func mouth(_ glance: UsageGlance) -> some View {
+        VStack(spacing: 0) {
+            PercentText(value: glance.hero?.percent, size: 38, unitSize: 20)
+                .foregroundStyle(numberColor(glance))
+                .frame(height: Metrics.numberHeight)
+            TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                Text(subtitle(glance, now: timeline.date))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(Palette.secondaryText)
+                    .lineLimit(1)
+                    .frame(height: Metrics.subtitleHeight)
             }
-            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
-            .offset(x: expandedLeft + Metrics.inset, y: top)
-
             serviceSwitch
-                .frame(width: surface.width - expandedLeft - Metrics.switchTrailing,
-                       height: Metrics.numberHeight, alignment: .trailing)
-                .offset(y: top)
+                .padding(.top, Metrics.switchGap)
         }
-        .frame(width: surface.width, height: surface.height, alignment: .topLeading)
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
+        .frame(width: surface.width)
+        .offset(y: bar + Metrics.numberTop)
     }
 
     private var serviceSwitch: some View {
@@ -192,7 +162,7 @@ private struct PercentText: View {
 
 /// Apple's dark-mode system colors and grays.
 enum Palette {
-    static let blue = Color(hex: 0x0A84FF)
+    static let eyeBlue = Color(hex: 0x409CFF)
     static let yellow = Color(hex: 0xFFD60A)
     static let red = Color(hex: 0xFF453A)
     static let stale = Color(hex: 0x8E8E93)
@@ -211,10 +181,10 @@ enum Palette {
         }
     }
 
-    /// Color of the mood glyph.
+    /// Color of the eyes; the blue is the brighter high-contrast variant so it reads on black.
     static func mood(_ mood: CreatureState) -> Color {
         switch mood {
-        case .happy: return blue
+        case .happy: return eyeBlue
         case .worried: return yellow
         case .panic: return red
         case .sleeping: return stale
@@ -229,7 +199,7 @@ private extension Color {
     }
 }
 
-/// How the island's content arrives: it fades in, drops 4 pt, grows from 97% and sharpens.
+/// How the mouth's content arrives: it fades in, drops 4 pt, grows from 97% and sharpens.
 private struct Reveal: ViewModifier {
     let hidden: Bool
 
