@@ -1,0 +1,19 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-16T12:00:00Z"},
+  "title": "Limit Coach",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1912, "h": 560, "title": "All states · actual size"},
+    "Prototype.dc.html": {"x": 1992, "y": 0, "w": 960, "h": 640, "title": "Live prototype · hover the notch", "is_interactive": true},
+    "Spec.dc.html": {"x": 0, "y": 760, "w": 1400, "h": 1060, "title": "Screen 2 · Expanded anatomy (2×)"},
+    "Mascot.dc.html": {"x": 1480, "y": 760, "w": 1400, "h": 600, "title": "Mascot moods"},
+    "Motion.dc.html": {"x": 2960, "y": 760, "w": 1400, "h": 1180, "title": "Motion notes"}
+  },
+  "order": ["Main.dc.html", "Prototype.dc.html", "Spec.dc.html", "Mascot.dc.html", "Motion.dc.html"],
+  "notes": {
+    "title": {"x": 0, "y": -300, "text": "Limit Coach — notch app", "kind": "title1", "maxW": 2952}
+  },
+  "designSystems": []
+}

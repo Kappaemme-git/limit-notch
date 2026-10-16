@@ -5,10 +5,72 @@ import XCTest
 final class UsageGlanceTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_792_160_000)
 
-    private func glance(_ fields: String, updatedAgo: TimeInterval = 60) -> UsageGlance {
+    private func glance(_ fields: String, updatedAgo: TimeInterval = 60,
+                        selection: ServiceSelection = .auto) -> UsageGlance {
         let updated = ISO8601DateFormatter().string(from: now.addingTimeInterval(-updatedAgo))
         let json = #"{"updated_at":"\#(updated)","mood":"happy"\#(fields.isEmpty ? "" : ",")\#(fields)}"#
-        return UsageGlance(StatusSnapshot.from(data: Data(json.utf8), at: now))
+        return UsageGlance(StatusSnapshot.from(data: Data(json.utf8), at: now), selection: selection)
+    }
+
+    private let design = #""claude_5h":70,"claude_7d":17,"codex_5h":8,"codex_7d":3"#
+
+    func testMutedRowShowsBothWeeklyWindowsLikeTheDesign() {
+        let auto = glance(design)
+        XCTAssertEqual(auto.hero?.title, "Claude")
+        XCTAssertEqual(auto.others.map(\.title), ["Claude weekly", "Codex weekly"])
+        // Picking Codex makes its highest window the hero; the row stays the same.
+        let codex = glance(design, selection: .codex)
+        XCTAssertEqual(codex.hero?.title, "Codex")
+        XCTAssertEqual(codex.hero?.percent, 8)
+        XCTAssertEqual(codex.others.map(\.title), ["Claude weekly", "Codex weekly"])
+    }
+
+    func testSelectionDrivesTheHeroAndTheMood() {
+        let fields = #""claude_5h":30,"claude_7d":17,"codex_7d":90"#
+        let auto = glance(fields)
+        XCTAssertEqual(auto.hero?.title, "Codex weekly")
+        XCTAssertEqual(auto.mood, .panic)
+        let claude = glance(fields, selection: .claude)
+        XCTAssertEqual(claude.hero?.title, "Claude")
+        XCTAssertEqual(claude.hero?.percent, 30)
+        XCTAssertEqual(claude.others.map(\.title), ["Claude weekly", "Codex weekly"])
+        XCTAssertEqual(claude.mood, .happy)
+        XCTAssertEqual(glance(#""claude_5h":70"#, selection: .claude).mood, .worried)
+    }
+
+    func testSelectedServiceWithoutData() {
+        let codex = glance(#""claude_5h":30,"claude_7d":17"#, selection: .codex)
+        XCTAssertNil(codex.hero)
+        XCTAssertEqual(codex.others.map(\.title), ["Claude weekly"])
+        XCTAssertEqual(codex.message(now: now), "No Codex usage reported yet")
+        XCTAssertEqual(codex.mood, .sleeping)
+    }
+
+    func testSelectionRawValuesArePersistable() {
+        XCTAssertEqual(ServiceSelection.allCases.map(\.label), ["Auto", "Claude", "Codex"])
+        for selection in ServiceSelection.allCases {
+            XCTAssertEqual(ServiceSelection(rawValue: selection.rawValue), selection)
+        }
+    }
+
+    func testDebugScenariosMatchTheDesignColumns() {
+        XCTAssertNil(DebugScenario(environment: [:]))
+        XCTAssertEqual(DebugScenario(environment: ["LIMITNOTCH_DEBUG_MOOD": "Sleeping"]), .sleep)
+        let expected: [(DebugScenario, CreatureState, String, String)] = [
+            (.happy, .happy, "30%", "Resets in 3h 48m"),
+            (.worried, .worried, "70%", "Resets in 1h 52m"),
+            // Codex has room, so panic suggests switching instead of the design's "Resets in 41m".
+            (.panic, .panic, "95%", "Switch to Codex soon"),
+            (.sleep, .sleeping, "42%", "Last synced 47m ago")
+        ]
+        for (scenario, mood, percent, message) in expected {
+            let glance = UsageGlance(scenario.snapshot(at: now))
+            XCTAssertEqual(glance.mood, mood, "\(scenario)")
+            XCTAssertEqual(UsageFormatting.percent(glance.hero?.percent), percent, "\(scenario)")
+            XCTAssertEqual(glance.message(now: now), message, "\(scenario)")
+            XCTAssertEqual(glance.others.map { "\($0.title) \(UsageFormatting.percent($0.percent))" },
+                           ["Claude weekly 17%", "Codex weekly 3%"])
+        }
     }
 
     func testHeroIsTheHighestWindowAndTheRestAreSecondary() {
@@ -55,7 +117,8 @@ final class UsageGlanceTests: XCTestCase {
         let stale = glance(#""claude_5h":50"#, updatedAgo: 2 * 3600)
         XCTAssertFalse(stale.isCurrent)
         XCTAssertEqual(stale.hero?.percent, 50)
-        XCTAssertEqual(stale.message(now: now), "Last updated 2h ago")
+        XCTAssertEqual(stale.message(now: now), "Last synced 2h ago")
+        XCTAssertEqual(stale.mood, .sleeping)
 
         let missing = UsageGlance(.unavailable(nil))
         XCTAssertNil(missing.hero)

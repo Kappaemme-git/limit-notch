@@ -1,17 +1,21 @@
 # LimitNotch
 
-LimitNotch lives in the MacBook notch. It reads `~/.usage-watcher/status.json` (and `claude_live.json`) every 10 seconds and whenever it opens. The app itself does not use the network, API keys, or external dependencies.
+LimitNotch lives in the MacBook notch. It reads `~/.usage-watcher/status.json` and `claude_live.json` the moment either file changes (a DispatchSource watches the directory and both files), and once a minute so old data turns grey. The app itself does not use the network, API keys, or external dependencies.
 
-Collapsed, the black shape matches the camera housing with no ears: its width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`. macOS does not expose the corner radius; an 8 pt visual match is used independently of height. Hover springs it open into a compact glance: the mascot on the left, one hero line for the most critical window (for example "Claude 69%") with a plain-English status such as "Resets in 3h 10m" or "Switch to Codex soon", a single ring colored by level on the right, and the other windows in one muted row underneath. The fixed-size drawing surface avoids layout work during the shape morph; the mascot uses an AppKit display link at the screen refresh rate, up to 120 fps. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
+The design lives in [`design/`](design): `Main.dc.html` shows every state at actual size per mood, `Prototype.dc.html` is the live hover prototype.
 
-The mascot is a flat electric blue circle with two small white vertical oval eyes slightly left of center and no mouth. It breathes, blinks at random intervals and glances around, leaning toward where it looks. Its mood follows the highest reported window, including a forecast that reaches 100% before reset:
+Collapsed, the black shape is the camera housing plus a slim ear on each side, so both stay visible beside the camera: a tiny mascot on the left, the hero percentage on the right, colored green under 60%, yellow from 60% to 84%, red from 85%, and grey when the data is stale. The housing's width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`. Hover springs it open into a 380 × 130 pt island: an **Auto | Claude | Codex** switch on top (remembered in UserDefaults; clicking it never activates the app), the mascot on the left, one hero line for the selected service (for example "Claude 70%") with a plain-English status such as "Resets in 1h 52m", "Getting close" or "Last synced 47m ago", a ring with the number on the right, and a muted row such as "Claude weekly 17% · Codex weekly 3%". Auto shows the most critical window. The fixed-size drawing surface avoids layout work during the shape morph; the mascot uses an AppKit display link at the screen refresh rate, up to 120 fps. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
+
+The mascot is a round character with two white vertical oval eyes slightly left of center and no mouth. Its whole body changes color with its mood, and moods blend into each other with a short squash. It blinks at random intervals and glances around. Its mood follows the selected service (on Auto, the highest window, including a forecast that reaches 100% before reset):
 
 | Status | Mascot |
 | --- | --- |
-| `happy` / `ok` | Relaxed blinking and the occasional squash-and-stretch hop |
-| `worried` / `warn` | Smaller, raised eyes, a slow wobble and more frequent glances |
-| `panic` / `crit` | Fast blinking, a quick shake and a red glow |
-| missing, invalid, or older than one hour | Asleep: closed eyes, slow breathing, a floating Zzz |
+| `happy` / `ok` | Electric blue, smiling ^ ^ eyes, a soft bounce every 2.4 s |
+| `worried` / `warn` | Amber, smaller raised eyes under slanted brows, a sway and a sliding sweat drop |
+| `panic` / `crit` | Red, big round eyes, a pulsing red glow and a short shake every 2 s |
+| missing, invalid, or no sync for 30 minutes | Grey and asleep: closed eyes, slow breathing, a drifting Zz |
+
+To preview a mood without real data, start the binary with `LIMITNOTCH_DEBUG_MOOD=happy|worried|panic|sleep` (the design's values); add `LIMITNOTCH_DEBUG_EXPANDED=1` to keep the island open.
 
 [`docs/mascot.svg`](docs/mascot.svg) is an SVG + CSS version of the same character for web pages; set `data-mood` to `happy`, `worried`, `panic` or `sleep`.
 
@@ -80,7 +84,7 @@ Write `~/.usage-watcher/status.json` with this schema:
 }
 ```
 
-`claude_5h`, `claude_7d`, `codex_5h`, `codex_7d`, and `claude_app.fh`/`sd` are percentages from 0 to 100. Reset timestamps are Unix seconds and may be `null`. `claude_data_at`, `codex_data_at`, and `claude_app.at` accept Unix seconds or ISO 8601 timestamps. `level` is `ok`, `warn`, or `crit`; `mood` is `happy`, `worried`, or `panic`. The highest reported window decides the mood: under 60% is happy, 60–84.9% is worried, and 85% or more is panic. A measured usage trend that projects 100% before the same window resets also sets worried. `note` is optional text. `updated_at` is an ISO 8601 UTC timestamp and controls the one-hour freshness limit. Replace the example timestamps with current values. Dates appear in the Mac's local time zone with English labels. The former generic `reset` field is ignored.
+`claude_5h`, `claude_7d`, `codex_5h`, `codex_7d`, and `claude_app.fh`/`sd` are percentages from 0 to 100. Reset timestamps are Unix seconds and may be `null`. `claude_data_at`, `codex_data_at`, and `claude_app.at` accept Unix seconds or ISO 8601 timestamps. `level` is `ok`, `warn`, or `crit`; `mood` is `happy`, `worried`, or `panic`. The highest reported window decides the mood: under 60% is happy, 60–84.9% is worried, and 85% or more is panic. A measured usage trend that projects 100% before the same window resets also sets worried. `note` is optional text. `updated_at` is an ISO 8601 UTC timestamp and controls the 30-minute freshness limit. Replace the example timestamps with current values. Dates appear in the Mac's local time zone with English labels. The former generic `reset` field is ignored.
 
 ## Develop locally
 

@@ -56,6 +56,9 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         notch.onExpansionChange = { [weak self] expanded in self?.expansionChanged(expanded) }
         store.start()
         panel.orderFrontRegardless()
+        if ProcessInfo.processInfo.environment["LIMITNOTCH_DEBUG_EXPANDED"] == "1" {
+            notch.setPinned(true)
+        }
 
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(screenConfigurationChanged),
@@ -138,14 +141,14 @@ private extension NSScreen {
 private final class NotchContainerView: NSView {
     var onHoverChange: ((Bool) -> Void)?
     private var hoverArea: NSTrackingArea?
-    private let hostingView: NSHostingView<NotchView>
+    private let hostingView: FirstClickHostingView
     var drawingSize: CGSize {
         didSet { needsLayout = true }
     }
 
     init(frame: NSRect, drawingSize: CGSize, rootView: NotchView) {
         self.drawingSize = drawingSize
-        hostingView = NSHostingView(rootView: rootView)
+        hostingView = FirstClickHostingView(rootView: rootView)
         super.init(frame: frame)
         wantsLayer = true
         layer?.masksToBounds = true
@@ -182,6 +185,12 @@ private final class NotchContainerView: NSView {
         super.mouseExited(with: event)
         if event.trackingArea === hoverArea { onHoverChange?(false) }
     }
+}
+
+/// The panel never activates the app, so its window is never key. Accepting the first click lets
+/// the service switch respond immediately instead of swallowing a click to focus the window.
+private final class FirstClickHostingView: NSHostingView<NotchView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 private final class NotchPanel: NSPanel {

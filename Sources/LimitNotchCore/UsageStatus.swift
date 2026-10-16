@@ -68,10 +68,13 @@ public struct UsageStatus: Equatable, Sendable {
         return nil
     }
 
+    /// With the helpers syncing every 60 s, half an hour without a sync means they stopped.
+    public static let staleAfter: TimeInterval = 30 * 60
+
     public func isFresh(at date: Date) -> Bool {
         guard let updatedAt else { return false }
         let age = date.timeIntervalSince(updatedAt)
-        return age >= -300 && age <= 3_600
+        return age >= -300 && age <= Self.staleAfter
     }
 }
 

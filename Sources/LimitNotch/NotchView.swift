@@ -3,149 +3,225 @@ import LimitNotchCore
 import SwiftUI
 
 /// The fixed-size drawing surface prevents layout work during the silhouette spring. The panel
-/// window clips it to the hardware camera housing while collapsed.
+/// window clips it to the collapsed notch and ears, or to the expanded island.
 struct NotchView: View {
     @ObservedObject var store: StatusStore
     @ObservedObject var notch: NotchState
+    @AppStorage("serviceSelection") private var selection: ServiceSelection = .auto
+    @Namespace private var pill
 
+    /// Offsets inside the expanded body, from design/Main.dc.html; vertical ones are measured
+    /// from the bottom of the notch band.
     private enum Metrics {
-        static let inset: CGFloat = 20
+        static let pillTop: CGFloat = 6
         static let mascot: CGFloat = 44
-        static let mascotGap: CGFloat = 14
-        static let ring: CGFloat = 40
-        /// The row holding the mascot, the hero text and the ring, just below the notch band.
-        static let heroRow: CGFloat = 44
-        static let topPadding: CGFloat = 8
+        static let mascotLeading: CGFloat = 20
+        static let mascotTop: CGFloat = 36
+        static let textLeading: CGFloat = 78
+        static let textTop: CGFloat = 32
+        static let ring: CGFloat = 44
+        static let ringTrailing: CGFloat = 20
+        static let ringTop: CGFloat = 34
     }
 
     private var geometry: NotchGeometry { notch.geometry }
     private var expanded: Bool { notch.isExpanded }
-    private var glance: UsageGlance { UsageGlance(store.snapshot) }
-
-    private var mascotCenter: CGPoint {
-        CGPoint(x: Metrics.inset + Metrics.mascot / 2,
-                y: geometry.barHeight + Metrics.topPadding + Metrics.heroRow / 2)
-    }
+    private var surface: CGSize { geometry.expandedSize }
+    private var bar: CGFloat { geometry.barHeight }
+    /// Left edges of the collapsed and expanded bodies within the drawing surface.
+    private var collapsedLeft: CGFloat { (surface.width - geometry.collapsedBodyWidth) / 2 }
+    private var expandedLeft: CGFloat { NotchGeometry.expandedShoulder }
 
     var body: some View {
-        drawingSurface
+        let glance = UsageGlance(store.snapshot, selection: selection)
+        ZStack(alignment: .topLeading) {
+            NotchBody(geometry: geometry, progress: expanded ? 1 : 0)
+                .fill(Color.black)
+            if expanded && glance.mood == .panic {
+                NotchBody(geometry: geometry, progress: 1)
+                    .stroke(Palette.red.opacity(0.22), lineWidth: 2)
+                    .transition(.opacity)
+            }
+
+            earPercent(glance)
+
+            if expanded {
+                expandedContent(glance)
+                    .transition(.asymmetric(
+                        insertion: .modifier(active: Reveal(hidden: true), identity: Reveal(hidden: false))
+                            .animation(.spring(response: 0.32, dampingFraction: 0.8).delay(0.14)),
+                        removal: .opacity.animation(.easeOut(duration: 0.1))
+                    ))
+            }
+
+            mascot(glance)
+        }
+        .frame(width: surface.width, height: surface.height, alignment: .topLeading)
+        .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
         .contextMenu {
             Button("Refresh Now") { store.refresh() }
             Divider()
             Button("Quit LimitNotch") { NSApp.terminate(nil) }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilitySummary)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilitySummary(glance))
         .accessibilityHint("Hover to view usage and reset times")
     }
 
-    private var drawingSurface: some View {
-        ZStack(alignment: .topLeading) {
-            NotchBody(geometry: geometry, progress: expanded ? 1 : 0)
-                .fill(Color.black.shadow(.inner(color: .white.opacity(expanded ? 0.11 : 0), radius: 5, y: -1.5)))
+    // MARK: - Collapsed ears
 
-            if expanded {
-                expandedContent
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: -6))
-                            .animation(.easeOut(duration: 0.24).delay(0.08)),
-                        removal: .opacity.animation(.easeIn(duration: 0.1))
-                    ))
-            }
-
-            if expanded {
-                MascotView(state: store.snapshot.creatureState, diameter: Metrics.mascot,
-                           isAnimating: notch.isAnimating)
-                    .frame(width: Metrics.mascot * 2, height: Metrics.mascot * 2)
-                    .position(mascotCenter)
-                    .transition(.opacity.animation(.easeOut(duration: 0.18).delay(0.1)))
-            }
-        }
-        .frame(width: geometry.expandedSize.width, height: geometry.expandedSize.height)
-        .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
-    }
-
-    // MARK: - Expanded glance
-
-    /// Mascot on the left, one hero line with a plain-English status in the middle, a single ring
-    /// on the right, and the other windows in a quiet row underneath.
-    private var expandedContent: some View {
-        let glance = self.glance
-        let full = geometry.expandedSize
-        return TimelineView(.periodic(from: .now, by: 15)) { timeline in
-            VStack(alignment: .leading, spacing: 9) {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        heroLine(glance)
-                        Text(glance.message(now: timeline.date))
-                            .font(.system(size: 12, weight: .medium, design: .rounded).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                    Spacer(minLength: 0)
-                    UsageRing(value: glance.hero?.percent, color: levelColor(glance))
-                        .frame(width: Metrics.ring, height: Metrics.ring)
-                }
-                .frame(height: Metrics.heroRow)
-
-                if !glance.others.isEmpty {
-                    secondaryRow(glance.others)
-                }
-            }
+    /// The hero percentage in the right ear, colored by level; it fades out as the island opens.
+    private func earPercent(_ glance: UsageGlance) -> some View {
+        let trailing = (surface.width + geometry.collapsedBodyWidth) / 2 - NotchGeometry.earTextInset
+        let width = NotchGeometry.earWidth - NotchGeometry.earTextInset
+        return Text(glance.hero.map { UsageFormatting.percent($0.percent) } ?? "—")
+            .font(.system(size: 12, weight: .heavy, design: .rounded).monospacedDigit())
+            .foregroundStyle(levelColor(glance))
+            .numericTransition(glance.hero?.percent)
             .lineLimit(1)
-            .padding(.top, geometry.barHeight + Metrics.topPadding)
-            .padding(.leading, Metrics.inset + Metrics.mascot + Metrics.mascotGap)
-            .padding(.trailing, Metrics.inset)
-        }
-        .frame(width: full.width, height: full.height, alignment: .topLeading)
+            .fixedSize()
+            .frame(width: width, height: bar, alignment: .trailing)
+            .offset(x: trailing - width)
+            .opacity(expanded ? 0 : 1)
+            .animation(.easeOut(duration: 0.12), value: expanded)
+            .animation(.easeInOut(duration: 0.4), value: glance.hero)
+            .allowsHitTesting(false)
     }
 
-    private func heroLine(_ glance: UsageGlance) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(glance.hero?.title ?? "No data")
-            if let hero = glance.hero {
-                Text(UsageFormatting.percent(hero.percent))
-                    .monospacedDigit()
-                    .numericTransition(hero.percent)
+    /// One mascot that springs between the left ear and the island, changing size on the way.
+    private func mascot(_ glance: UsageGlance) -> some View {
+        let diameter = expanded ? Metrics.mascot : NotchGeometry.earMascotDiameter
+        let center = expanded
+            ? CGPoint(x: expandedLeft + Metrics.mascotLeading + Metrics.mascot / 2,
+                      y: bar + Metrics.mascotTop + Metrics.mascot / 2)
+            : CGPoint(x: collapsedLeft + NotchGeometry.earMascotInset + NotchGeometry.earMascotDiameter / 2,
+                      y: bar / 2)
+        return MascotView(state: glance.mood, isAnimating: notch.isAnimating, popTrigger: selection.rawValue)
+            .frame(width: diameter * MascotDrawingView.canvasScale, height: diameter * MascotDrawingView.canvasScale)
+            .position(center)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    // MARK: - Expanded island
+
+    /// The service switch on top, the hero line with its status and the quiet row on the left,
+    /// and one ring on the right.
+    private func expandedContent(_ glance: UsageGlance) -> some View {
+        let ringLeft = surface.width - expandedLeft - Metrics.ringTrailing - Metrics.ring
+        let textLeft = expandedLeft + Metrics.textLeading
+        return ZStack(alignment: .topLeading) {
+            serviceSwitch
+                .frame(width: surface.width)
+                .offset(y: bar + Metrics.pillTop)
+
+            TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                heroText(glance, now: timeline.date)
+            }
+            .frame(width: ringLeft - 8 - textLeft, alignment: .leading)
+            .offset(x: textLeft, y: bar + Metrics.textTop)
+
+            UsageRing(value: glance.hero?.percent, color: ringColor(glance),
+                      textColor: glance.isCurrent ? Palette.primaryText : Palette.stale)
+                .frame(width: Metrics.ring, height: Metrics.ring)
+                .offset(x: ringLeft, y: bar + Metrics.ringTop)
+        }
+        .frame(width: surface.width, height: surface.height, alignment: .topLeading)
+    }
+
+    private var serviceSwitch: some View {
+        HStack(spacing: 2) {
+            ForEach(ServiceSelection.allCases, id: \.self) { option in
+                let isSelected = option == selection
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { selection = option }
+                } label: {
+                    Text(option.label)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(isSelected ? Color.white : Palette.switchText)
+                        .padding(.horizontal, 11)
+                        .frame(height: 20)
+                        .background {
+                            if isSelected {
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(Palette.switchThumb)
+                                    .matchedGeometryEffect(id: "thumb", in: pill)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show \(option.label)")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .font(.system(size: 20, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white.opacity(glance.isCurrent ? 0.95 : 0.6))
-        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
+        .padding(2)
+        .background(Palette.switchTrack, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 
-    private func secondaryRow(_ windows: [UsageWindow]) -> some View {
-        HStack(spacing: 14) {
-            ForEach(windows, id: \.title) { window in
-                HStack(spacing: 4) {
-                    Text(window.title)
-                    Text(UsageFormatting.percent(window.percent))
-                        .foregroundStyle(.white.opacity(0.6))
+    private func heroText(_ glance: UsageGlance, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                Text(glance.hero?.title ?? glance.selection.service?.name ?? "No data")
+                    .foregroundStyle(glance.isCurrent ? Palette.primaryText : Palette.secondaryText)
+                if glance.hero != nil || glance.selection != .auto {
+                    Text(UsageFormatting.percent(glance.hero?.percent))
+                        .monospacedDigit()
+                        .foregroundStyle(levelColor(glance))
+                        .numericTransition(glance.hero?.percent)
                 }
             }
+            .font(.system(size: 20, weight: .heavy, design: .rounded))
+            .kerning(-0.2)
+            .frame(height: 24)
+
+            Text(glance.message(now: now))
+                .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(Palette.secondaryText)
+                .frame(height: 16)
+
+            if !glance.others.isEmpty {
+                Text(glance.others.map { "\($0.title) \(UsageFormatting.percent($0.percent))" }.joined(separator: " · "))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(Palette.stale)
+                    .frame(height: 14)
+                    .padding(.top, 4)
+            }
         }
-        .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
-        .foregroundStyle(.white.opacity(0.36))
+        .lineLimit(1)
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
     }
 
     /// Color is reserved for the level of the hero window; old data is grey.
     private func levelColor(_ glance: UsageGlance) -> Color {
-        guard glance.isCurrent, let hero = glance.hero else { return Color(white: 0.5) }
+        guard glance.isCurrent, let hero = glance.hero else { return Palette.stale }
         return Palette.color(for: hero.tone)
     }
 
-    private var accessibilitySummary: String {
-        let glance = self.glance
+    private func ringColor(_ glance: UsageGlance) -> Color {
+        glance.isCurrent ? levelColor(glance) : Palette.ringStale
+    }
+
+    private func accessibilitySummary(_ glance: UsageGlance) -> String {
         let line = { (window: UsageWindow) in "\(window.title) \(UsageFormatting.percent(window.percent))" }
         let parts = [glance.hero.map(line) ?? "No data", glance.message(now: Date())] + glance.others.map(line)
         return "LimitNotch: " + parts.joined(separator: ". ")
     }
 }
 
-/// Apple's dark-mode system colors, so the ring reads like native UI.
+/// Apple's dark-mode system colors and grays, as used in the design.
 enum Palette {
-    static let green = Color(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255)
-    static let yellow = Color(red: 0xFF / 255, green: 0xD6 / 255, blue: 0x0A / 255)
-    static let red = Color(red: 0xFF / 255, green: 0x45 / 255, blue: 0x3A / 255)
+    static let green = Color(hex: 0x30D158)
+    static let yellow = Color(hex: 0xFFD60A)
+    static let red = Color(hex: 0xFF453A)
+    static let stale = Color(hex: 0x8E8E93)
+    static let ringStale = Color(hex: 0x636366)
+    static let ringTrack = Color(hex: 0x2C2C2E)
+    static let primaryText = Color(hex: 0xF5F5F7)
+    static let secondaryText = Color(hex: 0xAEAEB2)
+    static let switchTrack = Color(hex: 0x1C1C1E)
+    static let switchThumb = Color(hex: 0x3A3A3C)
+    static let switchText = Color(hex: 0x98989D)
 
     static func color(for tone: UsageTone) -> Color {
         switch tone {
@@ -153,6 +229,26 @@ enum Palette {
         case .high: return yellow
         case .critical: return red
         }
+    }
+}
+
+private extension Color {
+    init(hex: UInt32) {
+        self.init(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255,
+                  blue: Double(hex & 0xFF) / 255, opacity: 1)
+    }
+}
+
+/// How the island's content arrives: it fades in, drops 6 pt, grows from 96% and sharpens.
+private struct Reveal: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(hidden ? 0 : 1)
+            .offset(y: hidden ? -6 : 0)
+            .scaleEffect(hidden ? 0.96 : 1, anchor: .top)
+            .blur(radius: hidden ? 4 : 0)
     }
 }
 
@@ -177,29 +273,40 @@ private struct NotchBody: Shape {
     }
 }
 
-/// A single progress ring for the hero window. It sweeps in from empty each time the notch opens.
+/// A single progress ring with the number inside. It sweeps in from empty each time the notch opens.
 private struct UsageRing: View {
     let value: Double?
     let color: Color
+    let textColor: Color
     @State private var appeared = false
 
-    private static let lineWidth: CGFloat = 5
+    private static let lineWidth: CGFloat = 4.5
+    /// The ring's radius is 18.5 pt in a 44 pt box.
+    private static let inset: CGFloat = 22 - 18.5
 
     var body: some View {
         let fraction = appeared ? min(max(value ?? 0, 0), 100) / 100 : 0
         ZStack {
-            Circle().stroke(.white.opacity(0.12), lineWidth: Self.lineWidth)
+            Circle().stroke(Palette.ringTrack, lineWidth: Self.lineWidth)
             Circle()
                 .trim(from: 0, to: fraction)
                 .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
-        .padding(Self.lineWidth / 2)
-        .animation(.spring(response: 0.7, dampingFraction: 0.86), value: fraction)
-        .animation(.easeInOut(duration: 0.3), value: color)
-        .onAppear {
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.86).delay(0.1)) { appeared = true }
+        .padding(Self.inset)
+        .overlay {
+            Text(value.map { String(UsageFormatting.percent($0).dropLast()) } ?? "—")
+                .font(.system(size: 11, weight: .heavy, design: .rounded).monospacedDigit())
+                .foregroundStyle(textColor)
+                .numericTransition(value)
         }
+        .animation(.spring(response: 0.6, dampingFraction: 0.86), value: fraction)
+        .animation(.easeInOut(duration: 0.4), value: color)
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.86).delay(0.1)) { appeared = true }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(value.map { "\(UsageFormatting.percent($0)) used" } ?? "No data")
     }
 }
 

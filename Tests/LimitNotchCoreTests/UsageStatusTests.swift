@@ -117,8 +117,8 @@ final class UsageStatusTests: XCTestCase {
         XCTAssertEqual(StatusSnapshot.from(data: data, at: now), .current(status))
     }
 
-    func testOlderThanOneHourSleepsButRetainsValues() throws {
-        let updated = iso(now.addingTimeInterval(-3_601))
+    func testOlderThanHalfAnHourSleepsButRetainsValues() throws {
+        let updated = iso(now.addingTimeInterval(-1_801))
         let json = "{\"claude_5h\":50,\"updated_at\":\"\(updated)\",\"level\":\"crit\",\"mood\":\"panic\"}"
         let data = Data(json.utf8)
         let status = try UsageStatusParser.parse(data)
@@ -126,7 +126,7 @@ final class UsageStatusTests: XCTestCase {
         XCTAssertEqual(StatusSnapshot.from(data: data, at: now).creatureState, .sleeping)
         XCTAssertEqual(StatusSnapshot.from(data: data, at: now).status?.claude5h, 50)
 
-        let boundary = "{\"updated_at\":\"\(iso(now.addingTimeInterval(-3_600)))\",\"level\":\"ok\"}"
+        let boundary = "{\"updated_at\":\"\(iso(now.addingTimeInterval(-1_800)))\",\"level\":\"ok\"}"
         XCTAssertEqual(StatusSnapshot.from(data: Data(boundary.utf8), at: now).creatureState, .happy)
     }
 

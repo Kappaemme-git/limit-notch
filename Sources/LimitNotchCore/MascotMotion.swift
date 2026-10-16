@@ -22,6 +22,9 @@ public struct MascotPose: Equatable, Sendable {
     /// Opacity of the floating Zzz and the phase (0..<1) of its first letter.
     public var zzzOpacity: Double = 0
     public var zzzPhase: Double = 0
+    /// The worried sweat drop: vertical slide (fraction of the diameter) and opacity.
+    public var dropOffset: Double = 0
+    public var dropOpacity: Double = 0
 
     public init() {}
 
@@ -42,13 +45,16 @@ public struct MascotPose: Equatable, Sendable {
         pose.glow = mix(a.glow, b.glow)
         pose.zzzOpacity = mix(a.zzzOpacity, b.zzzOpacity)
         pose.zzzPhase = b.zzzPhase
+        pose.dropOffset = mix(a.dropOffset, b.dropOffset)
+        pose.dropOpacity = mix(a.dropOpacity, b.dropOpacity)
         return pose
     }
 }
 
 /// Procedural animation for the mascot. `pose(at:state:seed:)` is a pure function of time, so a
-/// TimelineView can draw any frame without stored state. Random-looking events (blinks, glances,
-/// hops) come from a hash of the seed and the time slot, so they are irregular but deterministic.
+/// TimelineView can draw any frame without stored state. Random-looking events (blinks and
+/// glances) come from a hash of the seed and the time slot, so they are irregular but deterministic.
+/// The mood loops (bounce, sway, shake, breath) follow the keyframes of the design prototype.
 public enum MascotMotion {
     public static let blinkDuration: TimeInterval = 0.12
     public static let breathingAmount = 0.03
@@ -67,7 +73,6 @@ public enum MascotMotion {
         var glanceHold: ClosedRange<Double> = 0.7...1.4
         var eyeRamp: Double = 0.1
         var leanRamp: Double = 0.32
-        var hops = false
     }
 
     static func tuning(for state: CreatureState) -> Tuning {
@@ -76,7 +81,6 @@ public enum MascotMotion {
         case .happy:
             t.blinkPeriod = 4.1
             t.blinkJitter = 0.9
-            t.hops = true
         case .worried:
             t.blinkPeriod = 3.4
             t.blinkJitter = 1
@@ -98,11 +102,32 @@ public enum MascotMotion {
         case .sleeping:
             t.blinkPeriod = nil
             t.glancePeriod = nil
-            t.breathPeriod = 5
-            t.breathAmount = 0.035
+            t.breathAmount = 0
         }
         return t
     }
+
+    // The mood loops of design/Prototype.dc.html (lcBounce, lcSway, lcShake, lcGlow, lcBreath,
+    // lcDrop and lcZ), as (fraction of the period, value) keyframes.
+    static let bouncePeriod = 2.4
+    static let bounceLift: [(Double, Double)] = [(0, 0), (0.14, -0.14), (0.28, 0), (0.38, -0.05), (0.48, 0), (1, 0)]
+    static let bounceScaleX: [(Double, Double)] = [(0, 1), (0.14, 0.97), (0.28, 1.07), (0.38, 1), (0.48, 1.02), (0.62, 1), (1, 1)]
+    static let bounceScaleY: [(Double, Double)] = [(0, 1), (0.14, 1.03), (0.28, 0.93), (0.38, 1), (0.48, 0.98), (0.62, 1), (1, 1)]
+    static let swayPeriod = 3.2
+    static let swayAngle = 3 * Double.pi / 180
+    static let shakePeriod = 2.0
+    static let shakeX: [(Double, Double)] = [(0, 0), (0.03, -0.07), (0.07, 0.07), (0.11, -0.07), (0.15, 0.07),
+                                             (0.19, -0.07), (0.23, 0.07), (0.27, -0.02), (0.30, 0), (1, 0)]
+    static let shakeAngle: [(Double, Double)] = [(0, 0), (0.03, -4), (0.07, 4), (0.11, -4), (0.15, 4),
+                                                 (0.19, -4), (0.23, 4), (0.27, -1), (0.30, 0), (1, 0)]
+    static let glowPeriod = 1.2
+    static let sleepBreathPeriod = 4.0
+    static let dropPeriod = 2.2
+    static let dropSlide: [(Double, Double)] = [(0, -0.012), (0.75, 0.024), (1, 0.036)]
+    static let dropFade: [(Double, Double)] = [(0, 0), (0.2, 1), (0.75, 1), (1, 0)]
+    public static let zzzPeriod = 2.4
+    /// The second "z" starts this far (as a fraction of the period) behind the first.
+    public static let zzzStagger = 0.8 / 2.4
 
     public static func pose(at time: TimeInterval, state: CreatureState, seed: UInt64) -> MascotPose {
         let tuning = tuning(for: state)
@@ -126,30 +151,56 @@ public enum MascotMotion {
 
         switch state {
         case .happy:
-            if let hop = hop(at: time, seed: seed) {
-                pose.offsetY += hop.lift
-                pose.scaleY *= 1 - hop.squash
-                pose.scaleX *= 1 + hop.squash * 0.8
-            }
+            // A soft bounce every 2.4 s: hop, squash on landing, a small rebound.
+            let phase = cycle(time, bouncePeriod)
+            pose.offsetY += keyframes(phase, bounceLift)
+            pose.scaleX *= keyframes(phase, bounceScaleX)
+            pose.scaleY *= keyframes(phase, bounceScaleY)
         case .worried:
-            let wobble = sin(2 * .pi * time / 2.4)
-            pose.rotation += wobble * 0.06
-            pose.offsetX += sin(2 * .pi * time / 2.4 + 0.7) * 0.015
-            pose.eyeScale = 0.8
-            pose.eyeLift = -0.07
+            // Sways ±3° while bobbing; the eyes shrink and lift under slanted brows.
+            let sway = -cos(2 * .pi * time / swayPeriod)
+            pose.rotation += sway * swayAngle
+            pose.offsetY += sway * 0.02
+            pose.eyeScale = 0.78
+            pose.eyeLift = -0.04
+            let drop = cycle(time, dropPeriod)
+            pose.dropOffset = keyframes(drop, dropSlide)
+            pose.dropOpacity = keyframes(drop, dropFade)
         case .panic:
-            let burst = 0.65 + 0.35 * sin(2 * .pi * time * 0.8)
-            pose.offsetX += sin(2 * .pi * 13 * time) * 0.045 * burst
-            pose.rotation += sin(2 * .pi * 9 * time + 1) * 0.05 * burst
-            pose.glow = 0.75 + 0.25 * sin(2 * .pi * time / 0.8)
-            pose.eyeScale = 1.08
+            // A short shake burst every 2 s and a red glow pulsing at 1.2 s.
+            let phase = cycle(time, shakePeriod)
+            pose.offsetX += keyframes(phase, shakeX, eased: false)
+            pose.rotation += keyframes(phase, shakeAngle, eased: false) * .pi / 180
+            pose.glow = 0.55 + 0.45 * (1 - cos(2 * .pi * time / glowPeriod)) / 2
         case .sleeping:
-            pose.rotation += sin(2 * .pi * time / 5 + 0.5) * 0.035
-            pose.offsetY += 0.02
+            let breath = (1 - cos(2 * .pi * time / sleepBreathPeriod)) / 2
+            pose.scaleX = 1 + 0.03 * breath
+            pose.scaleY = 1 - 0.03 * breath
+            pose.offsetY += 0.02 * breath
             pose.zzzOpacity = 1
-            pose.zzzPhase = (time / 3.2).truncatingRemainder(dividingBy: 1)
+            pose.zzzPhase = cycle(time, zzzPeriod)
         }
         return pose
+    }
+
+    /// Position within a repeating period, 0..<1.
+    static func cycle(_ time: Double, _ period: Double) -> Double {
+        let phase = (time / period).truncatingRemainder(dividingBy: 1)
+        return phase < 0 ? phase + 1 : phase
+    }
+
+    /// Value at `phase` between sorted keyframes, eased in and out per segment like CSS.
+    static func keyframes(_ phase: Double, _ frames: [(Double, Double)], eased: Bool = true) -> Double {
+        guard var previous = frames.first else { return 0 }
+        for frame in frames.dropFirst() {
+            if phase <= frame.0 {
+                let span = frame.0 - previous.0
+                let x = span > 0 ? (phase - previous.0) / span : 1
+                return previous.1 + (frame.1 - previous.1) * (eased ? smoothstep(x) : min(max(x, 0), 1))
+            }
+            previous = frame
+        }
+        return previous.1
     }
 
     // MARK: - Blinking
@@ -211,39 +262,6 @@ public enum MascotMotion {
         let eyes = smoothstep(local / tuning.eyeRamp) * smoothstep((duration - local) / tuning.eyeRamp)
         let lean = smoothstep(local / tuning.leanRamp) * smoothstep((duration - local) / tuning.leanRamp)
         return (direction.0, direction.1, eyes, lean)
-    }
-
-    // MARK: - Hopping
-
-    static let hopPeriod = 4.5
-    static let hopDuration = 1.25
-
-    /// A squash-and-stretch hop: anticipation, a parabolic jump, then a damped spring on landing.
-    /// `lift` is negative upward; positive `squash` flattens the body, negative stretches it.
-    static func hop(at time: Double, seed: UInt64) -> (lift: Double, squash: Double)? {
-        let slot = Int64((time / hopPeriod).rounded(.down))
-        guard random(seed, 8, slot) < 0.65 else { return nil }
-        let start = Double(slot) * hopPeriod + random(seed, 9, slot) * (hopPeriod - hopDuration)
-        let local = time - start
-        guard local >= 0, local <= hopDuration else { return nil }
-        let height = 0.12 + 0.07 * random(seed, 10, slot)
-
-        let anticipation = 0.14
-        let air = 0.46
-        if local < anticipation {
-            return (0, 0.12 * sin(.pi / 2 * local / anticipation))
-        }
-        if local < anticipation + air {
-            let x = (local - anticipation) / air
-            // Release the anticipation squash into a stretch that relaxes at the apex.
-            let release = smoothstep(x / 0.15)
-            let stretch = 0.09 * pow(2 * x - 1, 2)
-            return (-height * 4 * x * (1 - x), 0.12 * (1 - release) - stretch * release)
-        }
-        let settle = local - anticipation - air
-        let spring = 0.14 * exp(-6 * settle) * cos(2 * .pi * 3.2 * settle)
-        let impact = smoothstep(settle / 0.06)
-        return (0, -0.09 * (1 - impact) + spring * impact)
     }
 
     // MARK: - Helpers

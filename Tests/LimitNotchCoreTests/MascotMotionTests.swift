@@ -67,7 +67,42 @@ final class MascotMotionTests: XCTestCase {
         XCTAssertLessThan(pose.eyeLift, 0)
     }
 
-    func testHappyHopsAndLooksAroundWithTilt() {
+    func testHappyBouncesEveryTwoPointFourSeconds() {
+        // lcBounce: up 14% at 14% of the loop, squashed to 1.07 × 0.93 on landing at 28%.
+        XCTAssertEqual(MascotMotion.bouncePeriod, 2.4)
+        XCTAssertEqual(MascotMotion.keyframes(0.14, MascotMotion.bounceLift), -0.14, accuracy: 1e-9)
+        XCTAssertEqual(MascotMotion.keyframes(0.28, MascotMotion.bounceScaleX), 1.07, accuracy: 1e-9)
+        XCTAssertEqual(MascotMotion.keyframes(0.28, MascotMotion.bounceScaleY), 0.93, accuracy: 1e-9)
+        XCTAssertEqual(MascotMotion.keyframes(0.8, MascotMotion.bounceLift), 0)
+        XCTAssertEqual(MascotMotion.cycle(0.14 * 2.4 + 2.4 * 5, 2.4), 0.14, accuracy: 1e-9)
+        XCTAssertEqual(MascotMotion.cycle(-0.6, 2.4), 0.75, accuracy: 1e-9)
+    }
+
+    func testWorriedSwaysAndSweats() {
+        let poses = samples(0...6.4).map { MascotMotion.pose(at: $0, state: .worried, seed: 2) }
+        let maxLean = poses.map { abs($0.rotation) }.max()!
+        XCTAssertGreaterThan(maxLean, 0.045)
+        XCTAssertGreaterThan(poses.map(\.dropOpacity).max()!, 0.99)
+        XCTAssertEqual(poses.map(\.dropOpacity).min()!, 0, accuracy: 0.05)
+        XCTAssertTrue(poses.allSatisfy { (-0.013...0.037).contains($0.dropOffset) })
+        XCTAssertEqual(MascotMotion.pose(at: 1, state: .happy, seed: 2).dropOpacity, 0)
+    }
+
+    func testPanicShakesInShortBurstsEveryTwoSeconds() {
+        // Still for the last 70% of each 2 s loop, apart from glances.
+        let calm = samples(0.7...1.9, step: 0.05).map { MascotMotion.keyframes($0 / 2, MascotMotion.shakeX, eased: false) }
+        XCTAssertTrue(calm.allSatisfy { $0 == 0 })
+        XCTAssertEqual(MascotMotion.keyframes(0.07, MascotMotion.shakeX, eased: false), 0.07, accuracy: 1e-9)
+    }
+
+    func testSleepBreathesWiderAndShorter() {
+        let pose = MascotMotion.pose(at: 2, state: .sleeping, seed: 3)
+        XCTAssertEqual(pose.scaleX, 1.03, accuracy: 1e-9)
+        XCTAssertEqual(pose.scaleY, 0.97, accuracy: 1e-9)
+        XCTAssertEqual(pose.offsetY, 0.02, accuracy: 1e-9)
+    }
+
+    func testHappyLooksAroundWithTilt() {
         let poses = samples(0...120, step: 1.0 / 30).map { MascotMotion.pose(at: $0, state: .happy, seed: 11) }
         XCTAssertLessThan(poses.map(\.offsetY).min()!, -0.08, "should leave the ground")
         XCTAssertGreaterThan(poses.map(\.scaleX).max()!, 1.05, "should squash on landing")

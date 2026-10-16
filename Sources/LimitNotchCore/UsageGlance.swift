@@ -40,8 +40,31 @@ public struct UsageWindow: Equatable, Sendable {
     }
 }
 
-/// What the expanded notch says: the most critical window, one plain-English line about it, and
-/// the remaining windows.
+/// The "Auto | Claude | Codex" switch in the expanded notch. Raw values are stored in UserDefaults.
+public enum ServiceSelection: String, CaseIterable, Sendable {
+    case auto
+    case claude
+    case codex
+
+    public var label: String {
+        switch self {
+        case .auto: return "Auto"
+        case .claude: return "Claude"
+        case .codex: return "Codex"
+        }
+    }
+
+    public var service: UsageWindow.Service? {
+        switch self {
+        case .auto: return nil
+        case .claude: return .claude
+        case .codex: return .codex
+        }
+    }
+}
+
+/// What the notch shows: the hero window for the selected service, one plain-English line about
+/// it, the mascot's mood, and a quiet row with the other service.
 public struct UsageGlance: Equatable, Sendable {
     public enum Freshness: Equatable, Sendable {
         case current
@@ -53,11 +76,17 @@ public struct UsageGlance: Equatable, Sendable {
     }
 
     public let freshness: Freshness
-    /// The highest window; the earliest in display order wins a tie.
+    public let selection: ServiceSelection
+    /// The highest window of the selected service (of both on Auto); the earliest in display
+    /// order wins a tie.
     public let hero: UsageWindow?
+    /// The hero service's other window and the other service's weekly window, in display order.
     public let others: [UsageWindow]
+    public let mood: CreatureState
+    /// The other service, when it reports usage and all of it is comfortably low.
+    private let fallbackService: UsageWindow.Service?
 
-    public init(_ snapshot: StatusSnapshot) {
+    public init(_ snapshot: StatusSnapshot, selection: ServiceSelection = .auto) {
         let windows: [UsageWindow]
         switch snapshot {
         case .current(let status):
@@ -70,24 +99,49 @@ public struct UsageGlance: Equatable, Sendable {
             freshness = status == nil ? .missing : .incomplete
             windows = []
         }
-        let hero = windows.reduce(nil) { best, window in
-            best.map { window.percent > $0.percent ? window : $0 } ?? window
-        }
+        self.selection = selection
+
+        let candidates = windows.filter { selection.service == nil || $0.service == selection.service }
+        let hero = Self.highest(candidates)
         self.hero = hero
-        others = windows.filter { $0 != hero }
+
+        let heroService = hero?.service ?? selection.service
+        let sibling = windows.first { $0.service == heroService && $0 != hero }
+        let rest = windows.filter { $0.service != heroService }
+        let other = rest.first(where: \.isWeekly) ?? rest.first
+        others = windows.filter { $0 == sibling || $0 == other }
+        // Suggest the other service only when every one of its windows is comfortably low.
+        fallbackService = !rest.isEmpty && rest.allSatisfy { $0.tone == .normal } ? rest[0].service : nil
+
+        if freshness != .current {
+            mood = .sleeping
+        } else if selection == .auto {
+            // Auto also honors the forecast and the writer's own mood.
+            mood = snapshot.creatureState
+        } else if let hero {
+            switch hero.tone {
+            case .normal: mood = .happy
+            case .high: mood = .worried
+            case .critical: mood = .panic
+            }
+        } else {
+            mood = .sleeping
+        }
     }
 
     public var isCurrent: Bool { freshness == .current }
 
-    /// "Resets in 3h 10m", "Switch to Codex soon", "Last updated 2h ago" and so on.
+    /// "Resets in 3h 10m", "Switch to Codex soon", "Last synced 47m ago" and so on.
     public func message(now: Date) -> String {
         switch freshness {
         case .missing: return "Waiting for usage data"
         case .incomplete: return "Usage data is incomplete"
-        case .stale(let updatedAt): return "Last updated \(UsageFormatting.age(updatedAt, now: now))"
+        case .stale(let updatedAt): return "Last synced \(UsageFormatting.age(updatedAt, now: now))"
         case .current: break
         }
-        guard let hero else { return "No usage reported yet" }
+        guard let hero else {
+            return selection.service.map { "No \($0.name) usage reported yet" } ?? "No usage reported yet"
+        }
 
         let reset = hero.resetsAt.map { date -> String in
             let time = UsageFormatting.reset(date, now: now)
@@ -104,11 +158,9 @@ public struct UsageGlance: Equatable, Sendable {
         return hero.tone == .normal ? "Plenty of room" : "Getting close"
     }
 
-    /// The other service, when it reports usage and every one of its windows is comfortably low.
-    private var fallbackService: UsageWindow.Service? {
-        guard let hero else { return nil }
-        let other = others.filter { $0.service != hero.service }
-        guard !other.isEmpty, other.allSatisfy({ $0.tone == .normal }) else { return nil }
-        return other[0].service
+    private static func highest(_ windows: [UsageWindow]) -> UsageWindow? {
+        windows.reduce(nil) { best, window in
+            best.map { window.percent > $0.percent ? window : $0 } ?? window
+        }
     }
 }

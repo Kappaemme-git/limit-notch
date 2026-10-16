@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Limit Coach · Live prototype</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;600;700;800&amp;display=swap">
+<style>
+body{margin:0;background:#0E0E11}
+a{color:#93C5FD}a:hover{color:#BFDBFE}
+@keyframes lcBounce{0%,62%,100%{transform:translateY(0) scale(1,1)}14%{transform:translateY(-14%) scale(.97,1.03)}28%{transform:translateY(0) scale(1.07,.93)}38%{transform:translateY(-5%) scale(1,1)}48%{transform:translateY(0) scale(1.02,.98)}}
+@keyframes lcSway{0%,100%{transform:rotate(-3deg) translateY(-2%)}50%{transform:rotate(3deg) translateY(2%)}}
+@keyframes lcShake{0%,30%,100%{transform:translateX(0) rotate(0)}3%,11%,19%{transform:translateX(-7%) rotate(-4deg)}7%,15%,23%{transform:translateX(7%) rotate(4deg)}27%{transform:translateX(-2%) rotate(-1deg)}}
+@keyframes lcGlow{0%,100%{box-shadow:0 0 .3em .06em rgba(255,69,58,.55)}50%{box-shadow:0 0 .55em .16em rgba(255,69,58,.95)}}
+@keyframes lcBreath{0%,100%{transform:scale(1,1)}50%{transform:scale(1.03,.97) translateY(2%)}}
+@keyframes lcDrop{0%{transform:translateY(-6%);opacity:0}20%{opacity:1}75%{transform:translateY(12%);opacity:1}100%{transform:translateY(18%);opacity:0}}
+@keyframes lcZ{0%{transform:translate(0,0) scale(.6);opacity:0}25%{opacity:1}100%{transform:translate(.3em,-.6em) scale(1.15);opacity:0}}
+.lc-happy{animation:lcBounce 2.4s cubic-bezier(.3,.7,.4,1) infinite}
+.lc-worried{animation:lcSway 3.2s ease-in-out infinite}
+.lc-panic{animation:lcShake 2s linear infinite,lcGlow 1.2s ease-in-out infinite}
+.lc-sleep{animation:lcBreath 4s ease-in-out infinite}
+.lc-drop{transform-box:fill-box;animation:lcDrop 2.2s ease-in infinite}
+.lc-z{display:inline-block;animation:lcZ 2.4s ease-out infinite}
+.lc-z2{display:inline-block;animation:lcZ 2.4s ease-out .8s infinite}
+.lc-btn:focus-visible{outline:2px solid #60A5FA;outline-offset:2px}
+@media (prefers-reduced-motion: reduce){.lc-happy,.lc-worried,.lc-panic,.lc-sleep,.lc-drop,.lc-z,.lc-z2{animation:none}}
+</style>
+</helmet>
+<div style="width: 960px; height: 640px; box-sizing: border-box; padding: 32px; display: flex; flex-direction: column; gap: 22px; background: #0E0E11; color: #F5F5F7; font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', -apple-system, system-ui, sans-serif">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between">
+    <h1 style="margin: 0; font-size: 22px; font-weight: 800">Live prototype</h1>
+    <div style="font-size: 13px; color: #A1A1A6">Hover the notch to expand · shown at 150%</div>
+  </div>
+
+  <div style="position: relative; height: 360px; border-radius: 16px; overflow: hidden; background: radial-gradient(70% 120% at 18% 0%, #34407A 0%, rgba(52, 64, 122, 0) 60%), radial-gradient(60% 110% at 88% 20%, #5A2F6B 0%, rgba(90, 47, 107, 0) 55%), #12152A">
+    <div style="zoom: 1.5; position: relative; width: 597px; height: 240px">
+      <div style="position: absolute; left: 0; right: 0; top: 0; height: 32px; padding: 0 14px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; background: rgba(8, 8, 14, 0.42); font-family: -apple-system, system-ui, sans-serif; font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.92)">
+        <div style="display: flex; gap: 16px"><span style="font-weight: 700">Finder</span><span>File</span><span>Edit</span></div>
+        <div style="display: flex; gap: 12px; align-items: center"><svg viewBox="0 0 16 12" width="16" height="12" aria-hidden="true"><path d="M1.5 4.6 A9.5 9.5 0 0 1 14.5 4.6" style="fill: none; stroke: #FFFFFF; stroke-width: 1.6; stroke-linecap: round"></path><path d="M4 7.3 A5.8 5.8 0 0 1 12 7.3" style="fill: none; stroke: #FFFFFF; stroke-width: 1.6; stroke-linecap: round"></path><circle cx="8" cy="10" r="1.3" style="fill: #FFFFFF"></circle></svg><svg viewBox="0 0 25 12" width="25" height="12" aria-hidden="true"><rect x="0.75" y="0.75" width="20.5" height="10.5" rx="3" style="fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.2"></rect><rect x="2.5" y="2.5" width="13" height="7" rx="1.6" style="fill: #FFFFFF"></rect><path d="M23 4.5 V7.5" style="stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5; stroke-linecap: round"></path></svg><span>Fri 9:41</span></div>
+      </div>
+
+      <div onMouseEnter="{{ enter }}" onMouseLeave="{{ leave }}" style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: {{ w }}px; height: {{ h }}px; background: #000000; border-radius: 0 0 {{ r }}px {{ r }}px; box-shadow: {{ islandShadow }}; transition: {{ shapeTr }}">
+        <svg viewBox="0 0 10 10" aria-hidden="true" style="position: absolute; top: 0; left: -10px; width: 10px; height: 10px"><path d="M0 0 L10 0 L10 10 A10 10 0 0 0 0 0 Z" style="fill: #000000"></path></svg>
+        <svg viewBox="0 0 10 10" aria-hidden="true" style="position: absolute; top: 0; right: -10px; width: 10px; height: 10px"><path d="M0 0 L10 0 A10 10 0 0 0 0 10 Z" style="fill: #000000"></path></svg>
+        <div style="position: absolute; top: 12px; left: 50%; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 50%; background: #0A0C12; box-shadow: inset 0 0 0 1.5px #171B27"></div>
+
+        <div style="position: absolute; right: 11px; top: 0; height: 32px; display: flex; align-items: center; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; color: {{ color }}; opacity: {{ earOpacity }}; transition: opacity 120ms ease, color 400ms ease">{{ pct }}%</div>
+
+        <div style="position: absolute; top: 38px; left: 50%; display: flex; gap: 2px; padding: 2px; border-radius: 11px; background: #1C1C1E; opacity: {{ bodyOpacity }}; transform: translateX(-50%) translateY({{ bodyShift }}px) scale({{ bodyScale }}); filter: blur({{ bodyBlur }}px); transition: {{ bodyTr }}; pointer-events: {{ bodyPointer }}">
+          <sc-for list="{{ providers }}" as="p" hint-placeholder-count="3">
+            <button type="button" class="lc-btn" onClick="{{ p.pick }}" aria-pressed="{{ p.pressed }}" style="height: 20px; padding: 0 11px; border: 0; border-radius: 9px; background: {{ p.bg }}; color: {{ p.fg }}; font-family: inherit; font-size: 11px; font-weight: 700; line-height: 20px; cursor: pointer; transition: background 160ms ease, color 160ms ease">{{ p.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="position: absolute; left: 78px; top: 64px; display: flex; flex-direction: column; opacity: {{ bodyOpacity }}; transform: translateY({{ bodyShift }}px) scale({{ bodyScale }}); transform-origin: left top; filter: blur({{ bodyBlur }}px); transition: {{ bodyTr }}; pointer-events: {{ bodyPointer }}">
+          <div style="font-size: 20px; line-height: 24px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; color: {{ heroName }}">{{ provider }} <span style="color: {{ color }}; transition: color 400ms ease">{{ pct }}%</span></div>
+          <div style="font-size: 12px; line-height: 16px; font-weight: 600; color: #AEAEB2">{{ reset }}</div>
+          <div style="margin-top: 4px; font-size: 11px; line-height: 14px; font-weight: 600; color: #8E8E93; white-space: nowrap">Claude weekly 17% · Codex weekly 3%</div>
+        </div>
+
+        <div style="position: absolute; right: 20px; top: 66px; width: 44px; height: 44px; opacity: {{ bodyOpacity }}; transform: translateY({{ bodyShift }}px) scale({{ bodyScale }}); filter: blur({{ bodyBlur }}px); transition: {{ bodyTr }}; pointer-events: {{ bodyPointer }}">
+          <svg viewBox="0 0 44 44" width="44" height="44" role="img" aria-label="{{ ringLabel }}"><circle cx="22" cy="22" r="18.5" style="fill: none; stroke: #2C2C2E; stroke-width: 4.5"></circle><circle cx="22" cy="22" r="18.5" transform="rotate(-90 22 22)" style="fill: none; stroke: {{ ringColor }}; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: {{ dash }} 116.3; transition: stroke-dasharray 600ms cubic-bezier(.2,.8,.2,1), stroke 400ms ease"></circle></svg>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; color: {{ ringText }}">{{ pct }}</div>
+        </div>
+
+        <div style="position: absolute; left: {{ mx }}px; top: {{ my }}px; font-size: {{ ms }}px; width: 1em; height: 1em; transition: {{ mascotTr }}">
+          <div style="width: 1em; height: 1em; transform: scale({{ squashX }}, {{ squashY }}); transition: transform 180ms cubic-bezier(.3,1.6,.5,1)">
+            <div class="{{ moodClass }}" style="position: relative; width: 1em; height: 1em; border-radius: 50%; background: linear-gradient(180deg, #3B82F6 0%, #2563EB 100%); opacity: {{ mascotOpacity }}; transition: opacity 300ms ease">
+              <sc-if value="{{ isHappy }}" hint-placeholder-val="{{ false }}">
+                <svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"><path d="M29 52 Q37 36 45 52" style="fill: none; stroke: #FFFFFF; stroke-width: 8; stroke-linecap: round"></path><path d="M49 52 Q57 36 65 52" style="fill: none; stroke: #FFFFFF; stroke-width: 8; stroke-linecap: round"></path></svg>
+              </sc-if>
+              <sc-if value="{{ isWorried }}" hint-placeholder-val="{{ true }}">
+                <svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible"><ellipse cx="39" cy="42" rx="4.5" ry="7.5" style="fill: #FFFFFF"></ellipse><ellipse cx="56" cy="42" rx="4.5" ry="7.5" style="fill: #FFFFFF"></ellipse><path d="M31 29 L44 24" style="stroke: #FFFFFF; stroke-width: 6; stroke-linecap: round"></path><path d="M51 24 L64 29" style="stroke: #FFFFFF; stroke-width: 6; stroke-linecap: round"></path><path class="lc-drop" d="M79 22 C83 29 85 32 85 36 A6 6 0 0 1 73 36 C73 32 75 29 79 22 Z" style="fill: #DBEAFE"></path></svg>
+              </sc-if>
+              <sc-if value="{{ isPanic }}" hint-placeholder-val="{{ false }}">
+                <svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"><circle cx="35" cy="46" r="12" style="fill: #FFFFFF"></circle><circle cx="60" cy="46" r="12" style="fill: #FFFFFF"></circle><circle cx="35" cy="46" r="4.5" style="fill: #1E3A8A"></circle><circle cx="60" cy="46" r="4.5" style="fill: #1E3A8A"></circle></svg>
+              </sc-if>
+              <sc-if value="{{ isSleep }}" hint-placeholder-val="{{ false }}">
+                <svg viewBox="0 0 100 100" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%"><path d="M30 48 Q37 55 44 48" style="fill: none; stroke: #FFFFFF; stroke-width: 7; stroke-linecap: round"></path><path d="M50 48 Q57 55 64 48" style="fill: none; stroke: #FFFFFF; stroke-width: 7; stroke-linecap: round"></path></svg>
+                <div aria-hidden="true" style="position: absolute; left: 0.86em; top: -0.24em; line-height: 1; font-weight: 800; color: #A5B4FC; white-space: nowrap"><span class="lc-z" style="font-size: 0.3em">Z</span><span class="lc-z2" style="font-size: 0.22em; position: relative; top: -0.8em">z</span></div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8E8E93">Scenario</div>
+      <div style="display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: #1C1C1E">
+        <sc-for list="{{ moods }}" as="m" hint-placeholder-count="4">
+          <button type="button" class="lc-btn" onClick="{{ m.pick }}" aria-pressed="{{ m.pressed }}" style="min-height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: {{ m.bg }}; color: {{ m.fg }}; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: {{ m.dot }}"></span>{{ m.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end">
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8E8E93">Without a pointer</div>
+      <button type="button" class="lc-btn" onClick="{{ togglePin }}" aria-pressed="{{ pinned }}" style="min-height: 44px; padding: 0 18px; border: 0; border-radius: 12px; background: {{ pinBg }}; color: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">{{ pinLabel }}</button>
+    </div>
+  </div>
+
+  <p style="margin: 0; font-size: 13px; line-height: 19px; color: #A1A1A6">Expand waits 120 ms of hover intent and runs on a 420 ms spring with slight overshoot. Collapse waits 300 ms after the pointer leaves, then eases out over 260 ms. Switching scenario squashes the mascot for 180 ms before the new face settles. Picking Codex in the pill recomputes the mood from Codex usage.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":640}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { hover: false, pinned: false, scenario: 'worried', provider: 'auto', pop: false };
+    this.timer = null;
+    this.popTimer = null;
+  }
+  componentWillUnmount() {
+    clearTimeout(this.timer);
+    clearTimeout(this.popTimer);
+  }
+  bump() {
+    clearTimeout(this.popTimer);
+    this.setState({ pop: true });
+    this.popTimer = setTimeout(() => this.setState({ pop: false }), 180);
+  }
+  renderVals() {
+    const s = this.state;
+    const open = s.hover || s.pinned;
+    const scenarios = {
+      happy: { label: 'Happy 30%', claude: 30, reset: 'Resets in 3h 48m' },
+      worried: { label: 'Worried 70%', claude: 70, reset: 'Resets in 1h 52m' },
+      panic: { label: 'Panic 95%', claude: 95, reset: 'Resets in 41m' },
+      sleep: { label: 'Sleep · stale', claude: 42, reset: 'Last synced 47m ago' }
+    };
+    const sc = scenarios[s.scenario];
+    const stale = s.scenario === 'sleep';
+    const showCodex = s.provider === 'codex';
+    const pct = showCodex ? 8 : sc.claude;
+    const reset = stale ? sc.reset : (showCodex ? 'Resets in 4h 10m' : sc.reset);
+    let mood = 'happy';
+    if (stale) mood = 'sleep';
+    else if (pct >= 85) mood = 'panic';
+    else if (pct >= 50) mood = 'worried';
+    const colors = { happy: '#30D158', worried: '#FFD60A', panic: '#FF453A', sleep: '#8E8E93' };
+    const color = colors[mood];
+    const spring = 'cubic-bezier(.34,1.36,.5,1)';
+    const shapeTr = open
+      ? `width 420ms ${spring}, height 420ms ${spring}, border-radius 420ms ${spring}, box-shadow 300ms ease`
+      : 'width 260ms cubic-bezier(.4,0,.2,1), height 260ms cubic-bezier(.4,0,.2,1), border-radius 260ms cubic-bezier(.4,0,.2,1), box-shadow 200ms ease';
+    const bodyTr = open
+      ? 'opacity 220ms ease 140ms, transform 320ms cubic-bezier(.2,.9,.3,1.1) 140ms, filter 220ms ease 140ms'
+      : 'opacity 100ms ease, transform 160ms ease, filter 100ms ease';
+    const mascotTr = open
+      ? `left 420ms ${spring}, top 420ms ${spring}, font-size 420ms ${spring}`
+      : 'left 260ms cubic-bezier(.4,0,.2,1), top 260ms cubic-bezier(.4,0,.2,1), font-size 260ms cubic-bezier(.4,0,.2,1)';
+    const moodColors = { happy: '#30D158', worried: '#FFD60A', panic: '#FF453A', sleep: '#8E8E93' };
+    return {
+      w: open ? 380 : 271,
+      h: open ? 130 : 32,
+      r: open ? 30 : 11,
+      islandShadow: open
+        ? (mood === 'panic' ? '0 12px 32px rgba(0,0,0,.45), 0 0 0 1px rgba(255,69,58,.24)' : '0 12px 32px rgba(0,0,0,.45)')
+        : '0 0 0 rgba(0,0,0,0)',
+      shapeTr,
+      bodyTr,
+      mascotTr,
+      earOpacity: open ? 0 : 1,
+      bodyOpacity: open ? 1 : 0,
+      bodyShift: open ? 0 : -6,
+      bodyScale: open ? 1 : 0.96,
+      bodyBlur: open ? 0 : 4,
+      bodyPointer: open ? 'auto' : 'none',
+      mx: open ? 20 : 13,
+      my: open ? 68 : 7,
+      ms: open ? 44 : 18,
+      squashX: s.pop ? 1.12 : 1,
+      squashY: s.pop ? 0.86 : 1,
+      moodClass: 'lc-' + mood,
+      mascotOpacity: mood === 'sleep' ? 0.85 : 1,
+      isHappy: mood === 'happy',
+      isWorried: mood === 'worried',
+      isPanic: mood === 'panic',
+      isSleep: mood === 'sleep',
+      pct,
+      color,
+      ringColor: stale ? '#636366' : color,
+      ringText: stale ? '#8E8E93' : '#F5F5F7',
+      heroName: stale ? '#AEAEB2' : '#F5F5F7',
+      dash: (116.3 * pct / 100).toFixed(1),
+      ringLabel: pct + '% used' + (stale ? ', data is stale' : ''),
+      provider: showCodex ? 'Codex' : 'Claude',
+      reset,
+      providers: [['auto', 'Auto'], ['claude', 'Claude'], ['codex', 'Codex']].map(([id, label]) => ({
+        label,
+        pressed: s.provider === id ? 'true' : 'false',
+        bg: s.provider === id ? '#3A3A3C' : 'transparent',
+        fg: s.provider === id ? '#FFFFFF' : '#98989D',
+        pick: () => { if (s.provider !== id) { this.setState({ provider: id }); this.bump(); } }
+      })),
+      moods: Object.keys(scenarios).map((id) => ({
+        label: scenarios[id].label,
+        pressed: s.scenario === id ? 'true' : 'false',
+        bg: s.scenario === id ? '#3A3A3C' : 'transparent',
+        fg: s.scenario === id ? '#FFFFFF' : '#AEAEB2',
+        dot: moodColors[id],
+        pick: () => { if (s.scenario !== id) { this.setState({ scenario: id }); this.bump(); } }
+      })),
+      pinned: s.pinned ? 'true' : 'false',
+      pinLabel: s.pinned ? 'Collapse island' : 'Expand island',
+      pinBg: s.pinned ? '#2563EB' : '#2C2C2E',
+      togglePin: () => this.setState({ pinned: !s.pinned }),
+      enter: () => {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.setState({ hover: true }), 120);
+      },
+      leave: () => {
+        clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.setState({ hover: false }), 300);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
