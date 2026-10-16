@@ -1,0 +1,4 @@
+.build/
+dist/
+.atlas-task*
+.DS_Store
