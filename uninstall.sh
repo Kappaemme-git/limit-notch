@@ -10,14 +10,13 @@ fail() {
 [[ -n "${HOME:-}" && -d "$HOME" ]] || fail "HOME must point to your home directory."
 [[ "$(id -u)" != 0 ]] || fail "Run this as your regular macOS user, without sudo."
 
-label="dev.kappaemme.limitnotch"
-service="gui/$(id -u)/$label"
-agent_plist="$HOME/Library/LaunchAgents/$label.plist"
-
-if launchctl print "$service" >/dev/null 2>&1; then
-    launchctl bootout "$service" || fail "Could not stop the LaunchAgent."
-fi
-rm -f -- "$agent_plist"
+for label in dev.kappaemme.limitnotch dev.kappaemme.limitnotch.claude-live; do
+    service="gui/$(id -u)/$label"
+    if launchctl print "$service" >/dev/null 2>&1; then
+        launchctl bootout "$service" || fail "Could not stop the LaunchAgent $label."
+    fi
+    rm -f -- "$HOME/Library/LaunchAgents/$label.plist"
+done
 rm -rf -- "$HOME/.limit-notch"
 
 printf 'LimitNotch removed. %s/.usage-watcher was left untouched.\n' "$HOME"

@@ -138,4 +138,77 @@ final class UsageStatusTests: XCTestCase {
         let future = "{\"updated_at\":\"\(iso(now.addingTimeInterval(301)))\",\"level\":\"ok\"}"
         XCTAssertEqual(StatusSnapshot.from(data: Data(future.utf8), at: now).creatureState, .sleeping)
     }
+
+    // MARK: - Live Claude data (claude_live.json)
+
+    private func liveData(fiveHour: Double, dataAt: Date, source: String = "claude-code-oauth-usage") -> Data {
+        Data("""
+        {"reading": {"claude_5h": \(fiveHour), "claude_7d": 15, "claude_5h_resets_at": 1792174200,
+                     "claude_7d_resets_at": 1792576800, "claude_data_at": \(Int(dataAt.timeIntervalSince1970)),
+                     "claude_source": "\(source)"},
+         "error": null, "failures": 0}
+        """.utf8)
+    }
+
+    private func staleDesktopStatus() -> Data {
+        Data("""
+        {"claude_5h": 15, "claude_7d": 13, "codex_7d": 3, "codex_7d_resets_at": 1792655962,
+         "claude_source": "claude-desktop-app", "claude_data_at": "\(iso(now.addingTimeInterval(-1500)))",
+         "level": "ok", "mood": "happy", "note": "All good: Claude 5h 15%",
+         "updated_at": "\(iso(now.addingTimeInterval(-600)))"}
+        """.utf8)
+    }
+
+    func testNewerLiveReadingReplacesStaleClaudeValues() {
+        let snapshot = StatusSnapshot.from(data: staleDesktopStatus(),
+                                           liveData: liveData(fiveHour: 43, dataAt: now.addingTimeInterval(-20)), at: now)
+        guard case .current(let status) = snapshot else { return XCTFail("expected current, got \(snapshot)") }
+        XCTAssertEqual(status.claude5h, 43)
+        XCTAssertEqual(status.claude7d, 15)
+        XCTAssertEqual(status.claude5hResetsAt, Date(timeIntervalSince1970: 1_792_174_200))
+        XCTAssertEqual(status.claudeSource, "claude-code-oauth-usage")
+        XCTAssertEqual(status.claudeDataAt, now.addingTimeInterval(-20))
+        // Codex data is kept; the stale note is dropped.
+        XCTAssertEqual(status.codex7d, 3)
+        XCTAssertEqual(status.codex7dResetsAt, Date(timeIntervalSince1970: 1_792_655_962))
+        XCTAssertNil(status.note)
+        XCTAssertEqual(status.updatedAt, now.addingTimeInterval(-20))
+    }
+
+    func testLiveReadingRecomputesTheMood() {
+        let worried = StatusSnapshot.from(data: staleDesktopStatus(),
+                                          liveData: liveData(fiveHour: 75, dataAt: now), at: now)
+        XCTAssertEqual(worried.creatureState, .worried)
+        let panic = StatusSnapshot.from(data: staleDesktopStatus(),
+                                        liveData: liveData(fiveHour: 95, dataAt: now), at: now)
+        XCTAssertEqual(panic.creatureState, .panic)
+    }
+
+    func testOlderLiveReadingIsIgnored() throws {
+        let status = try UsageStatusParser.parse(staleDesktopStatus())
+        let snapshot = StatusSnapshot.from(data: staleDesktopStatus(),
+                                           liveData: liveData(fiveHour: 43, dataAt: now.addingTimeInterval(-3000)), at: now)
+        XCTAssertEqual(snapshot, .current(status))
+        XCTAssertEqual(snapshot.status?.claude5h, 15)
+    }
+
+    func testLiveReadingWorksWithoutStatusFile() {
+        let snapshot = StatusSnapshot.from(data: nil, liveData: liveData(fiveHour: 43, dataAt: now), at: now)
+        XCTAssertEqual(snapshot.status?.claude5h, 43)
+        XCTAssertNil(snapshot.status?.codex7d)
+        XCTAssertEqual(snapshot.creatureState, .happy)
+    }
+
+    func testInvalidLiveFileFallsBackToStatusFile() {
+        for junk in ["broken", #"{"reading": null}"#, #"{"reading": {"claude_5h": 43}}"#] {
+            let snapshot = StatusSnapshot.from(data: staleDesktopStatus(), liveData: Data(junk.utf8), at: now)
+            XCTAssertEqual(snapshot.status?.claude5h, 15, junk)
+        }
+    }
+
+    func testSourceLabels() {
+        XCTAssertEqual(UsageFormatting.sourceLabel("claude-code-oauth-usage"), "Claude live")
+        XCTAssertEqual(UsageFormatting.sourceLabel("claude-desktop-app"), "Claude app")
+        XCTAssertNil(UsageFormatting.sourceLabel(nil))
+    }
 }

@@ -44,6 +44,16 @@ public enum UsageFormatting {
         return "\(minutes / (24 * 60))d ago"
     }
 
+    /// Short name for `claude_source`, shown in the expanded footer.
+    public static func sourceLabel(_ source: String?) -> String? {
+        switch source {
+        case "claude-code-oauth-usage": return "Claude live"
+        case "claude-code-statusline": return "Claude Code"
+        case "claude-desktop-app": return "Claude app"
+        default: return nil
+        }
+    }
+
     /// The highest of the three tracked windows, used for the collapsed gauge.
     public static func peak(_ status: UsageStatus?) -> Double? {
         [status?.claude5h, status?.claude7d, status?.codex7d].compactMap { $0 }.max()

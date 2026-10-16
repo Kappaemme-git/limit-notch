@@ -2,11 +2,17 @@ import LimitNotchCore
 import SwiftUI
 
 /// The round blue mascot. Layout takes `diameter` × `diameter`; the canvas overflows that box so
-/// hops, the panic glow and the floating Zzz are not clipped.
-struct MascotView: View {
+/// hops, the panic glow and the floating Zzz are not clipped. The diameter animates, and the
+/// canvas redraws at every step so the mascot stays crisp while it grows or shrinks.
+struct MascotView: View, Animatable {
     let state: CreatureState
-    let diameter: CGFloat
+    var diameter: CGFloat
     var isAnimating = true
+
+    nonisolated var animatableData: CGFloat {
+        get { diameter }
+        set { diameter = newValue }
+    }
 
     /// Seconds since launch keep the trigonometry precise; the reference-date epoch is ~8e8 s.
     private static let epoch = Date()

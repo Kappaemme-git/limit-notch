@@ -10,3 +10,4 @@ swift test --disable-sandbox --build-system native \
     --config-path "$PWD/.build/config" \
     --security-path "$PWD/.build/security" \
     --manifest-cache local
+python3 -m unittest discover -s Tests -p "*_tests.py"

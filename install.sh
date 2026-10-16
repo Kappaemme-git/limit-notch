@@ -10,7 +10,7 @@ fail() {
 [[ -n "${HOME:-}" && -d "$HOME" ]] || fail "HOME must point to your home directory."
 [[ "$(id -u)" != 0 ]] || fail "Run this as your regular macOS user, without sudo."
 
-for tool in git swift; do
+for tool in git swift /usr/bin/python3; do
     command -v "$tool" >/dev/null 2>&1 ||
         fail "$tool is missing. Install the Xcode Command Line Tools, then retry."
 done
@@ -34,6 +34,10 @@ agent_plist="$agent_dir/dev.kappaemme.limitnotch.plist"
 label="dev.kappaemme.limitnotch"
 domain="gui/$(id -u)"
 service="$domain/$label"
+helper="$install_dir/claude_live.py"
+helper_label="dev.kappaemme.limitnotch.claude-live"
+helper_plist="$agent_dir/$helper_label.plist"
+helper_service="$domain/$helper_label"
 
 mkdir -p "$install_dir"
 if [[ -e "$source_dir" || -L "$source_dir" ]]; then
@@ -59,18 +63,25 @@ fi
 source_binary="$source_dir/.build/release/LimitNotch"
 [[ -x "$source_binary" ]] || fail "The release build did not produce LimitNotch."
 
+[[ -f "$source_dir/scripts/claude_live.py" ]] || fail "The checkout has no scripts/claude_live.py."
+
 mkdir -p "$HOME/.usage-watcher" "$agent_dir"
 temp_binary=$(mktemp "$install_dir/.LimitNotch.XXXXXX")
+temp_helper=$(mktemp "$install_dir/.claude_live.XXXXXX")
 temp_plist=$(mktemp "$agent_dir/.dev.kappaemme.limitnotch.XXXXXX")
+temp_helper_plist=$(mktemp "$agent_dir/.dev.kappaemme.limitnotch.claude-live.XXXXXX")
 cleanup() {
-    rm -f -- "$temp_binary" "$temp_plist"
+    rm -f -- "$temp_binary" "$temp_helper" "$temp_plist" "$temp_helper_plist"
 }
 trap cleanup EXIT
 
 install -m 755 "$source_binary" "$temp_binary"
+install -m 755 "$source_dir/scripts/claude_live.py" "$temp_helper"
 
-binary_xml=$(printf '%s' "$installed_binary" |
-    sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+xml() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
 cat > "$temp_plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -80,7 +91,7 @@ cat > "$temp_plist" <<PLIST
     <string>$label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$binary_xml</string>
+        <string>$(xml "$installed_binary")</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -96,12 +107,48 @@ cat > "$temp_plist" <<PLIST
 PLIST
 plutil -lint "$temp_plist" >/dev/null || fail "Could not create a valid LaunchAgent plist."
 
-if launchctl print "$service" >/dev/null 2>&1; then
-    launchctl bootout "$service" || fail "Could not stop the existing LaunchAgent."
-fi
+# Refreshes Claude plan usage every 60 seconds from the endpoint behind Claude Code's /usage.
+cat > "$temp_helper_plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$helper_label</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-I</string>
+        <string>$(xml "$helper")</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>$(xml "$install_dir/claude_live.log")</string>
+</dict>
+</plist>
+PLIST
+plutil -lint "$temp_helper_plist" >/dev/null || fail "Could not create a valid helper LaunchAgent plist."
+
+for running in "$service" "$helper_service"; do
+    if launchctl print "$running" >/dev/null 2>&1; then
+        launchctl bootout "$running" || fail "Could not stop the existing LaunchAgent $running."
+    fi
+done
 mv -f "$temp_binary" "$installed_binary"
+mv -f "$temp_helper" "$helper"
 mv -f "$temp_plist" "$agent_plist"
+mv -f "$temp_helper_plist" "$helper_plist"
+launchctl bootstrap "$domain" "$helper_plist" ||
+    fail "Could not start the Claude usage helper. Check your macOS GUI session."
 launchctl bootstrap "$domain" "$agent_plist" ||
     fail "Could not start the LaunchAgent. Check your macOS GUI session."
 
 printf 'LimitNotch installed and started. It reads %s/.usage-watcher/status.json.\n' "$HOME"
+printf 'Claude usage refreshes every 60 s while you are signed in to Claude Code.\n'

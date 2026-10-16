@@ -34,6 +34,7 @@ public struct UsageStatus: Equatable, Sendable {
     public let claude7dResetsAt: Date?
     public let codex7dResetsAt: Date?
     public let claudeDataAt: Date?
+    public let claudeSource: String?
     public let codexDataAt: Date?
     public let claudeApp: ClaudeAppUsage?
     public let level: UsageLevel?
@@ -85,8 +86,12 @@ public enum StatusSnapshot: Equatable, Sendable {
         return .sleeping
     }
 
-    public static func from(data: Data?, at date: Date) -> StatusSnapshot {
-        guard let data, let status = try? UsageStatusParser.parse(data) else {
+    /// Builds the snapshot from status.json and, when it holds newer Claude data, the
+    /// claude_live.json written by the live helper.
+    public static func from(data: Data?, liveData: Data? = nil, at date: Date) -> StatusSnapshot {
+        let live = liveData.flatMap(LiveClaudeReading.parse)
+        let parsed = data.flatMap { try? UsageStatusParser.parse($0) }
+        guard let status = UsageStatus.merging(parsed, live: live) else {
             return .unavailable(nil)
         }
         guard status.creatureState != nil, let updatedAt = status.updatedAt,
@@ -94,6 +99,67 @@ public enum StatusSnapshot: Equatable, Sendable {
             return .unavailable(status)
         }
         return status.isFresh(at: date) ? .current(status) : .stale(status)
+    }
+}
+
+/// The latest reading from claude_live.json: `{"reading": {claude_5h, claude_7d, ...}}`.
+public struct LiveClaudeReading: Equatable, Sendable {
+    public let fiveHour: Double?
+    public let sevenDay: Double?
+    public let fiveHourResetsAt: Date?
+    public let sevenDayResetsAt: Date?
+    public let dataAt: Date
+    public let source: String?
+
+    public static func parse(_ data: Data) -> LiveClaudeReading? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let reading = object["reading"] as? [String: Any],
+              let status = try? UsageStatusParser.parse(JSONSerialization.data(withJSONObject: reading)),
+              let dataAt = status.claudeDataAt,
+              status.claude5h != nil || status.claude7d != nil
+        else { return nil }
+        return LiveClaudeReading(
+            fiveHour: status.claude5h,
+            sevenDay: status.claude7d,
+            fiveHourResetsAt: status.claude5hResetsAt,
+            sevenDayResetsAt: status.claude7dResetsAt,
+            dataAt: dataAt,
+            source: status.claudeSource
+        )
+    }
+}
+
+extension UsageStatus {
+    /// Applies a live Claude reading when it is newer than the Claude data in status.json. The
+    /// mood is then recomputed from the highest window, as the file's mood describes older data.
+    public static func merging(_ status: UsageStatus?, live: LiveClaudeReading?) -> UsageStatus? {
+        guard let live else { return status }
+        if let existing = status?.claudeDataAt, existing >= live.dataAt { return status }
+        let codex = status?.codex7d
+        let peak = [live.fiveHour, live.sevenDay, codex].compactMap { $0 }.max() ?? 0
+        let level: UsageLevel
+        switch UsageTone(percent: peak) {
+        case .normal: level = .ok
+        case .high: level = .warn
+        case .critical: level = .crit
+        }
+        let updatedAt = [status?.updatedAt, live.dataAt].compactMap { $0 }.max()
+        return UsageStatus(
+            claude5h: live.fiveHour,
+            claude7d: live.sevenDay,
+            codex7d: codex,
+            claude5hResetsAt: live.fiveHourResetsAt,
+            claude7dResetsAt: live.sevenDayResetsAt,
+            codex7dResetsAt: status?.codex7dResetsAt,
+            claudeDataAt: live.dataAt,
+            claudeSource: live.source,
+            codexDataAt: status?.codexDataAt,
+            claudeApp: status?.claudeApp,
+            level: level,
+            mood: nil,
+            note: nil,
+            updatedAt: updatedAt
+        )
     }
 }
 
@@ -138,6 +204,7 @@ public enum UsageStatusParser {
             claude7dResetsAt: unixSeconds(from: object["claude_7d_resets_at"]),
             codex7dResetsAt: unixSeconds(from: object["codex_7d_resets_at"]),
             claudeDataAt: date(from: object["claude_data_at"]),
+            claudeSource: (object["claude_source"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             codexDataAt: date(from: object["codex_data_at"]),
             claudeApp: app.map {
                 ClaudeAppUsage(

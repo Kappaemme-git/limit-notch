@@ -23,7 +23,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     private let notch = NotchState(geometry: AppDelegate.currentGeometry())
     private var panel: NotchPanel?
     private var pendingShrink: Task<Void, Never>?
-    private var clickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let panel = NotchPanel(
@@ -64,11 +63,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
                               name: NSWorkspace.screensDidSleepNotification, object: nil)
         workspace.addObserver(self, selector: #selector(screensDidWake),
                               name: NSWorkspace.screensDidWakeNotification, object: nil)
-
-        // A click anywhere else closes a panel that was pinned open with a click.
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            Task { @MainActor in self?.notch.dismissPin() }
-        }
     }
 
     private func expansionChanged(_ expanded: Bool) {
@@ -125,7 +119,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             visibleFrame: screen.visibleFrame,
             safeAreaTop: screen.safeAreaInsets.top,
             auxiliaryTopLeftWidth: screen.auxiliaryTopLeftArea?.width,
-            auxiliaryTopRightWidth: screen.auxiliaryTopRightArea?.width
+            auxiliaryTopRightWidth: screen.auxiliaryTopRightArea?.width,
+            scale: screen.backingScaleFactor
         )
     }
 }
