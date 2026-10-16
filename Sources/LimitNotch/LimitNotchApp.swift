@@ -136,8 +136,8 @@ private extension NSScreen {
     }
 }
 
-/// Clips a constant-size SwiftUI surface to the panel's actual window bounds. The mascot and
-/// content never relayout as the panel switches between the two window frames.
+/// Clips a constant-size SwiftUI surface to the panel's actual window bounds. The content never
+/// relayouts as the panel switches between the two window frames.
 private final class NotchContainerView: NSView {
     var onHoverChange: ((Bool) -> Void)?
     private var hoverArea: NSTrackingArea?

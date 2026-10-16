@@ -5,19 +5,20 @@ import SwiftUI
 /// Panel geometry plus the hover state that decides whether the notch is expanded.
 @MainActor
 final class NotchState: ObservableObject {
-    /// The design's 420 ms spring with slight overshoot, and a 260 ms ease-out collapse.
-    static let expandAnimation = Animation.spring(response: 0.42, dampingFraction: 0.74)
-    static let collapseAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.26)
+    /// Opens with a soft spring and a hint of overshoot; closes with a nearly critically damped
+    /// one that has visually settled (under 0.1 pt off) by `collapseSettle`.
+    static let expandAnimation = Animation.spring(response: 0.4, dampingFraction: 0.8)
+    static let collapseAnimation = Animation.spring(response: 0.3, dampingFraction: 0.95)
     /// How long the collapse needs before the window can shrink back.
-    static let collapseSettle: Duration = .milliseconds(300)
+    static let collapseSettle: Duration = .milliseconds(450)
     /// A short dwell before opening, so sweeping the pointer across the menu bar does not expand it.
-    static let hoverIntent: Duration = .milliseconds(120)
+    static let hoverIntent: Duration = .milliseconds(100)
     /// Grace period before closing, so grazing the edge does not flicker.
-    static let hoverGrace: Duration = .milliseconds(300)
+    static let hoverGrace: Duration = .milliseconds(250)
 
     @Published private(set) var geometry: NotchGeometry
     @Published private(set) var isExpanded = false
-    /// False while the display sleeps or the panel is hidden, so the mascot stops redrawing.
+    /// False while the display sleeps or the panel is hidden, so the mood glyph stops blinking.
     @Published var isAnimating = true
 
     /// Called with the new expansion state before SwiftUI animates it.

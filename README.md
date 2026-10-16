@@ -2,22 +2,22 @@
 
 LimitNotch lives in the MacBook notch. It reads `~/.usage-watcher/status.json` and `claude_live.json` the moment either file changes (a DispatchSource watches the directory and both files), and once a minute so old data turns grey. The app itself does not use the network, API keys, or external dependencies.
 
-The design lives in [`design/`](design): `Main.dc.html` shows every state at actual size per mood, `Prototype.dc.html` is the live hover prototype.
+Collapsed, the black shape is exactly the camera housing plus a tiny 36 pt ear on each side: 251 × 32 pt around the 179 pt notch of a 13" MacBook Air. The left ear holds the mood glyph, an 11 pt disc with the mascot's two eyes; the right ear holds only the percentage. The housing's width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`.
 
-Collapsed, the black shape is the camera housing plus a slim ear on each side, so both stay visible beside the camera: a tiny mascot on the left, the hero percentage on the right, colored green under 60%, yellow from 60% to 84%, red from 85%, and grey when the data is stale. The housing's width, height and position come from `NSScreen.auxiliaryTopLeftArea`, `auxiliaryTopRightArea` and `safeAreaInsets.top`. Hover springs it open into a 380 × 130 pt island: an **Auto | Claude | Codex** switch on top (remembered in UserDefaults; clicking it never activates the app), the mascot on the left, one hero line for the selected service (for example "Claude 70%") with a plain-English status such as "Resets in 1h 52m", "Getting close" or "Last synced 47m ago", a ring with the number on the right, and a muted row such as "Claude weekly 17% · Codex weekly 3%". Auto shows the most critical window. The fixed-size drawing surface avoids layout work during the shape morph; the mascot uses an AppKit display link at the screen refresh rate, up to 120 fps. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
+Hover springs the shape open into a 300 × 108 pt island (wider notches keep 60 pt on each side). The outline morphs continuously, with smooth (continuous-curvature) corners. The island shows one big number for the selected service, its window and reset time on one line (for example "Claude · Resets in 1h 52m"), and a small **Auto | Claude | Codex** switch. The switch is remembered in UserDefaults, and clicking it never activates the app. Auto shows the most critical window. The glyph glides from the ear to the start of that line. The number is white below 60%, yellow from 60% to 84%, red from 85%, and grey when the data is stale. The drawing surface has a fixed size, so the shape morph does no layout work, and SwiftUI animates it at the display's refresh rate, up to 120 Hz. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
 
-The mascot is a round character with two white vertical oval eyes slightly left of center and no mouth. Its whole body changes color with its mood, and moods blend into each other with a short squash. It blinks at random intervals and glances around. Its mood follows the selected service (on Auto, the highest window, including a forecast that reaches 100% before reset):
+The glyph's color follows the selected service (on Auto, the highest window, including a forecast that reaches 100% before reset). It blinks every few seconds and otherwise stays still:
 
-| Status | Mascot |
+| Status | Glyph |
 | --- | --- |
-| `happy` / `ok` | Electric blue, smiling ^ ^ eyes, a soft bounce every 2.4 s |
-| `worried` / `warn` | Amber, smaller raised eyes under slanted brows, a sway and a sliding sweat drop |
-| `panic` / `crit` | Red, big round eyes, a pulsing red glow and a short shake every 2 s |
-| missing, invalid, or no sync for 30 minutes | Grey and asleep: closed eyes, slow breathing, a drifting Zz |
+| `happy` / `ok` | Blue |
+| `worried` / `warn` | Yellow |
+| `panic` / `crit` | Red, with a soft glow |
+| missing, invalid, or no sync for 30 minutes | Grey, eyes closed |
 
-To preview a mood without real data, start the binary with `LIMITNOTCH_DEBUG_MOOD=happy|worried|panic|sleep` (the design's values); add `LIMITNOTCH_DEBUG_EXPANDED=1` to keep the island open.
+To preview a mood without real data, start the binary with `LIMITNOTCH_DEBUG_MOOD=happy|worried|panic|sleep`; add `LIMITNOTCH_DEBUG_EXPANDED=1` to keep the island open.
 
-[`docs/mascot.svg`](docs/mascot.svg) is an SVG + CSS version of the same character for web pages; set `data-mood` to `happy`, `worried`, `panic` or `sleep`.
+[`docs/mascot.svg`](docs/mascot.svg) is the full-size character as SVG + CSS for web pages; set `data-mood` to `happy`, `worried`, `panic` or `sleep`. [`design/`](design) holds the earlier, larger mockups.
 
 ## Requirements
 

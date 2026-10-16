@@ -31,33 +31,35 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertEqual(collapsed.height, geometry.notchRect.height)
         XCTAssertEqual(collapsed.maxY, geometry.notchRect.maxY)
         XCTAssertEqual(collapsed.midX, geometry.notchRect.midX, accuracy: 0.001)
-        // The design's 271 pt body around a 179 pt notch, plus an 8 pt shoulder on each side.
-        XCTAssertEqual(geometry.collapsedBodyWidth, 271)
-        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 287, height: 32))
+        // The 179 pt notch plus a 36 pt ear on each side, plus a 6 pt shoulder on each side.
+        XCTAssertEqual(geometry.collapsedBodyWidth, 251)
+        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 263, height: 32))
         XCTAssertTrue(collapsed.contains(geometry.notchRect))
     }
 
     func testEarContentStaysBesideTheCamera() {
         let geometry = notched()
         let shoulder = NotchGeometry.collapsedShoulder
-        let mascot = geometry.leftEarCenter
-        XCTAssertEqual(mascot, CGPoint(x: shoulder + 13 + 9, y: 16))
-        // The mascot sits entirely in the left ear, left of the camera housing.
         let notchLeft = shoulder + NotchGeometry.earWidth
-        XCTAssertLessThanOrEqual(mascot.x + NotchGeometry.earMascotDiameter / 2, notchLeft)
-        XCTAssertGreaterThanOrEqual(mascot.x - NotchGeometry.earMascotDiameter / 2, shoulder)
-        // The percentage ends 11 pt inside the right ear's outer edge.
-        XCTAssertEqual(geometry.rightEarTextTrailing, geometry.collapsedSize.width - shoulder - 11)
-        XCTAssertGreaterThan(geometry.rightEarTextTrailing, notchLeft + geometry.notchRect.width)
+        let notchRight = notchLeft + geometry.notchRect.width
+        // The glyph is centered in the left ear, entirely left of the camera housing.
+        let glyph = geometry.leftEarCenter
+        XCTAssertEqual(glyph, CGPoint(x: shoulder + 18, y: 16))
+        XCTAssertLessThanOrEqual(glyph.x + NotchGeometry.glyphDiameter / 2, notchLeft)
+        // The percentage is centered in the right ear; a 32 pt "100%" stays clear of the camera.
+        let percent = geometry.rightEarCenter
+        XCTAssertEqual(percent, CGPoint(x: geometry.collapsedSize.width - shoulder - 18, y: 16))
+        XCTAssertGreaterThanOrEqual(percent.x - 16, notchRight)
+        XCTAssertLessThanOrEqual(percent.x + 16, geometry.collapsedSize.width - shoulder)
     }
 
     func testOutlineMorphsFromEarsToIsland() {
         let collapsed = notched().outline(progress: 0)
-        XCTAssertEqual(collapsed, NotchOutline(topRadius: 8, bottomRadius: 11))
+        XCTAssertEqual(collapsed, NotchOutline(topRadius: 6, bottomRadius: 10))
         let expanded = notched().outline(progress: 1)
-        XCTAssertEqual(expanded, NotchOutline(topRadius: 10, bottomRadius: 30))
+        XCTAssertEqual(expanded, NotchOutline(topRadius: 10, bottomRadius: 24))
         // Halfway through the spring the radius is halfway between the two shapes.
-        XCTAssertEqual(notched().outline(progress: 0.5).bottomRadius, (11 + 30) / 2)
+        XCTAssertEqual(notched().outline(progress: 0.5).bottomRadius, (10 + 24) / 2)
         XCTAssertEqual(notched().outline(progress: 3), expanded)
     }
 
@@ -69,9 +71,10 @@ final class NotchGeometryTests: XCTestCase {
         // Inside under the notch and in the ears, outside at the extreme bottom corners.
         XCTAssertTrue(path.contains(CGPoint(x: rect.midX, y: rect.height - 0.5)))
         XCTAssertTrue(path.contains(notched().leftEarCenter))
+        XCTAssertTrue(path.contains(notched().rightEarCenter))
         // The shoulders flare out only at the top edge.
-        XCTAssertTrue(path.contains(CGPoint(x: 2.5, y: 0.2)))
-        XCTAssertFalse(path.contains(CGPoint(x: 2.5, y: 4)))
+        XCTAssertTrue(path.contains(CGPoint(x: 2, y: 0.2)))
+        XCTAssertFalse(path.contains(CGPoint(x: 2, y: 4)))
         XCTAssertFalse(path.contains(CGPoint(x: 0.5, y: rect.height - 0.5)))
         XCTAssertFalse(path.contains(CGPoint(x: rect.width - 0.5, y: rect.height - 0.5)))
         XCTAssertTrue(NotchOutline(topRadius: 4, bottomRadius: 8).path(in: .zero).isEmpty)
@@ -105,10 +108,12 @@ final class NotchGeometryTests: XCTestCase {
         let expanded = geometry.panelFrame(expanded: true)
         XCTAssertTrue(expanded.contains(collapsed))
         XCTAssertEqual(expanded.maxY, airFrame.maxY)
-        // The design's 380 × 130 island plus 10 pt shoulders.
-        XCTAssertEqual(geometry.expandedBodyWidth, 380)
-        XCTAssertEqual(expanded.width, 400)
-        XCTAssertEqual(expanded.height, 130)
+        // A 300 × 108 island plus 10 pt shoulders.
+        XCTAssertEqual(geometry.expandedBodyWidth, 300)
+        XCTAssertEqual(expanded.width, 320)
+        XCTAssertEqual(expanded.height, 108)
+        // A wider notch keeps a 60 pt margin on each side of the camera.
+        XCTAssertEqual(notched(left: 600, right: 600).expandedBodyWidth, 270 + 120)
     }
 
     func testScreenWithoutNotchFallsBackToTopCenterPill() {
@@ -162,11 +167,11 @@ final class NotchGeometryTests: XCTestCase {
     }
 
     func testExpandedPanelNeverExceedsANarrowScreen() {
-        let frame = CGRect(x: 0, y: 0, width: 360, height: 300)
+        let frame = CGRect(x: 0, y: 0, width: 300, height: 300)
         let geometry = NotchGeometry(screenFrame: frame, visibleFrame: frame, safeAreaTop: 0,
                                      auxiliaryTopLeftWidth: nil, auxiliaryTopRightWidth: nil)
         let panel = geometry.panelFrame(expanded: true)
-        XCTAssertEqual(panel.width, 360 - 2 * NotchGeometry.screenMargin)
+        XCTAssertEqual(panel.width, 300 - 2 * NotchGeometry.screenMargin)
         XCTAssertGreaterThanOrEqual(panel.minX, frame.minX)
         XCTAssertLessThanOrEqual(panel.maxX, frame.maxX)
     }

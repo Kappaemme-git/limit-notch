@@ -10,26 +10,23 @@ struct NotchView: View {
     @AppStorage("serviceSelection") private var selection: ServiceSelection = .auto
     @Namespace private var pill
 
-    /// Offsets inside the expanded body, from design/Main.dc.html; vertical ones are measured
-    /// from the bottom of the notch band.
+    /// Offsets inside the expanded body; vertical ones are measured from the bottom of the notch band.
     private enum Metrics {
-        static let pillTop: CGFloat = 6
-        static let mascot: CGFloat = 44
-        static let mascotLeading: CGFloat = 20
-        static let mascotTop: CGFloat = 36
-        static let textLeading: CGFloat = 78
-        static let textTop: CGFloat = 32
-        static let ring: CGFloat = 44
-        static let ringTrailing: CGFloat = 20
-        static let ringTop: CGFloat = 34
+        static let inset: CGFloat = 20
+        static let switchTrailing: CGFloat = 16
+        static let numberTop: CGFloat = 0
+        static let numberHeight: CGFloat = 44
+        static let subtitleHeight: CGFloat = 14
+        /// Space between the glyph and the subtitle it leads.
+        static let glyphGap: CGFloat = 6
     }
 
     private var geometry: NotchGeometry { notch.geometry }
     private var expanded: Bool { notch.isExpanded }
     private var surface: CGSize { geometry.expandedSize }
     private var bar: CGFloat { geometry.barHeight }
-    /// Left edges of the collapsed and expanded bodies within the drawing surface.
-    private var collapsedLeft: CGFloat { (surface.width - geometry.collapsedBodyWidth) / 2 }
+    /// Left edges of the collapsed panel and of the expanded body within the drawing surface.
+    private var collapsedOrigin: CGFloat { (surface.width - geometry.collapsedSize.width) / 2 }
     private var expandedLeft: CGFloat { NotchGeometry.expandedShoulder }
 
     var body: some View {
@@ -37,11 +34,6 @@ struct NotchView: View {
         ZStack(alignment: .topLeading) {
             NotchBody(geometry: geometry, progress: expanded ? 1 : 0)
                 .fill(Color.black)
-            if expanded && glance.mood == .panic {
-                NotchBody(geometry: geometry, progress: 1)
-                    .stroke(Palette.red.opacity(0.22), lineWidth: 2)
-                    .transition(.opacity)
-            }
 
             earPercent(glance)
 
@@ -49,12 +41,12 @@ struct NotchView: View {
                 expandedContent(glance)
                     .transition(.asymmetric(
                         insertion: .modifier(active: Reveal(hidden: true), identity: Reveal(hidden: false))
-                            .animation(.spring(response: 0.32, dampingFraction: 0.8).delay(0.14)),
+                            .animation(.spring(response: 0.34, dampingFraction: 0.86).delay(0.06)),
                         removal: .opacity.animation(.easeOut(duration: 0.1))
                     ))
             }
 
-            mascot(glance)
+            glyph(glance)
         }
         .frame(width: surface.width, height: surface.height, alignment: .topLeading)
         .contentShape(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
@@ -68,36 +60,29 @@ struct NotchView: View {
         .accessibilityHint("Hover to view usage and reset times")
     }
 
-    // MARK: - Collapsed ears
+    // MARK: - Ears
 
-    /// The hero percentage in the right ear, colored by level; it fades out as the island opens.
+    /// The percentage centered in the right ear; it fades out as the island opens and back in
+    /// once the body is nearly closed.
     private func earPercent(_ glance: UsageGlance) -> some View {
-        let trailing = (surface.width + geometry.collapsedBodyWidth) / 2 - NotchGeometry.earTextInset
-        let width = NotchGeometry.earWidth - NotchGeometry.earTextInset
-        return Text(glance.hero.map { UsageFormatting.percent($0.percent) } ?? "—")
-            .font(.system(size: 12, weight: .heavy, design: .rounded).monospacedDigit())
-            .foregroundStyle(levelColor(glance))
-            .numericTransition(glance.hero?.percent)
-            .lineLimit(1)
+        PercentText(value: glance.hero?.percent, size: 12, unitSize: 9)
+            .foregroundStyle(numberColor(glance))
             .fixedSize()
-            .frame(width: width, height: bar, alignment: .trailing)
-            .offset(x: trailing - width)
+            .position(x: collapsedOrigin + geometry.rightEarCenter.x, y: geometry.rightEarCenter.y)
             .opacity(expanded ? 0 : 1)
-            .animation(.easeOut(duration: 0.12), value: expanded)
+            .animation(expanded ? .easeOut(duration: 0.08) : .easeOut(duration: 0.18).delay(0.12), value: expanded)
             .animation(.easeInOut(duration: 0.4), value: glance.hero)
             .allowsHitTesting(false)
     }
 
-    /// One mascot that springs between the left ear and the island, changing size on the way.
-    private func mascot(_ glance: UsageGlance) -> some View {
-        let diameter = expanded ? Metrics.mascot : NotchGeometry.earMascotDiameter
+    /// The mood glyph glides from the left ear to the start of the subtitle as the body opens.
+    private func glyph(_ glance: UsageGlance) -> some View {
         let center = expanded
-            ? CGPoint(x: expandedLeft + Metrics.mascotLeading + Metrics.mascot / 2,
-                      y: bar + Metrics.mascotTop + Metrics.mascot / 2)
-            : CGPoint(x: collapsedLeft + NotchGeometry.earMascotInset + NotchGeometry.earMascotDiameter / 2,
-                      y: bar / 2)
-        return MascotView(state: glance.mood, isAnimating: notch.isAnimating, popTrigger: selection.rawValue)
-            .frame(width: diameter * MascotDrawingView.canvasScale, height: diameter * MascotDrawingView.canvasScale)
+            ? CGPoint(x: expandedLeft + Metrics.inset + NotchGeometry.glyphDiameter / 2,
+                      y: bar + Metrics.numberTop + Metrics.numberHeight + Metrics.subtitleHeight / 2)
+            : CGPoint(x: collapsedOrigin + geometry.leftEarCenter.x, y: geometry.leftEarCenter.y)
+        return MoodGlyph(mood: glance.mood, isAnimating: notch.isAnimating)
+            .frame(width: NotchGeometry.glyphDiameter, height: NotchGeometry.glyphDiameter)
             .position(center)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -105,45 +90,50 @@ struct NotchView: View {
 
     // MARK: - Expanded island
 
-    /// The service switch on top, the hero line with its status and the quiet row on the left,
-    /// and one ring on the right.
+    /// One big number with its window and reset time underneath (after the glyph), and the
+    /// service switch.
     private func expandedContent(_ glance: UsageGlance) -> some View {
-        let ringLeft = surface.width - expandedLeft - Metrics.ringTrailing - Metrics.ring
-        let textLeft = expandedLeft + Metrics.textLeading
+        let top = bar + Metrics.numberTop
         return ZStack(alignment: .topLeading) {
-            serviceSwitch
-                .frame(width: surface.width)
-                .offset(y: bar + Metrics.pillTop)
-
-            TimelineView(.periodic(from: .now, by: 15)) { timeline in
-                heroText(glance, now: timeline.date)
+            VStack(alignment: .leading, spacing: 0) {
+                PercentText(value: glance.hero?.percent, size: 36, unitSize: 20)
+                    .foregroundStyle(numberColor(glance))
+                    .frame(height: Metrics.numberHeight)
+                TimelineView(.periodic(from: .now, by: 15)) { timeline in
+                    Text(subtitle(glance, now: timeline.date))
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Palette.secondaryText)
+                        .lineLimit(1)
+                        .frame(height: Metrics.subtitleHeight)
+                }
+                .padding(.leading, NotchGeometry.glyphDiameter + Metrics.glyphGap)
             }
-            .frame(width: ringLeft - 8 - textLeft, alignment: .leading)
-            .offset(x: textLeft, y: bar + Metrics.textTop)
+            .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
+            .offset(x: expandedLeft + Metrics.inset, y: top)
 
-            UsageRing(value: glance.hero?.percent, color: ringColor(glance),
-                      textColor: glance.isCurrent ? Palette.primaryText : Palette.stale)
-                .frame(width: Metrics.ring, height: Metrics.ring)
-                .offset(x: ringLeft, y: bar + Metrics.ringTop)
+            serviceSwitch
+                .frame(width: surface.width - expandedLeft - Metrics.switchTrailing,
+                       height: Metrics.numberHeight, alignment: .trailing)
+                .offset(y: top)
         }
         .frame(width: surface.width, height: surface.height, alignment: .topLeading)
     }
 
     private var serviceSwitch: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 0) {
             ForEach(ServiceSelection.allCases, id: \.self) { option in
                 let isSelected = option == selection
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) { selection = option }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = option }
                 } label: {
                     Text(option.label)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundStyle(isSelected ? Color.white : Palette.switchText)
-                        .padding(.horizontal, 11)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(isSelected ? Palette.primaryText : Palette.switchText)
+                        .padding(.horizontal, 8)
                         .frame(height: 20)
                         .background {
                             if isSelected {
-                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                Capsule(style: .continuous)
                                     .fill(Palette.switchThumb)
                                     .matchedGeometryEffect(id: "thumb", in: pill)
                             }
@@ -156,50 +146,19 @@ struct NotchView: View {
             }
         }
         .padding(2)
-        .background(Palette.switchTrack, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(Palette.switchTrack, in: Capsule(style: .continuous))
     }
 
-    private func heroText(_ glance: UsageGlance, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(glance.hero?.title ?? glance.selection.service?.name ?? "No data")
-                    .foregroundStyle(glance.isCurrent ? Palette.primaryText : Palette.secondaryText)
-                if glance.hero != nil || glance.selection != .auto {
-                    Text(UsageFormatting.percent(glance.hero?.percent))
-                        .monospacedDigit()
-                        .foregroundStyle(levelColor(glance))
-                        .numericTransition(glance.hero?.percent)
-                }
-            }
-            .font(.system(size: 20, weight: .heavy, design: .rounded))
-            .kerning(-0.2)
-            .frame(height: 24)
-
-            Text(glance.message(now: now))
-                .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
-                .foregroundStyle(Palette.secondaryText)
-                .frame(height: 16)
-
-            if !glance.others.isEmpty {
-                Text(glance.others.map { "\($0.title) \(UsageFormatting.percent($0.percent))" }.joined(separator: " · "))
-                    .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(Palette.stale)
-                    .frame(height: 14)
-                    .padding(.top, 4)
-            }
-        }
-        .lineLimit(1)
-        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: glance.hero)
+    /// "Claude · Resets in 1h 52m"; just the status when there is no number to label.
+    private func subtitle(_ glance: UsageGlance, now: Date) -> String {
+        let message = glance.message(now: now)
+        return glance.hero.map { "\($0.title) · \(message)" } ?? message
     }
 
-    /// Color is reserved for the level of the hero window; old data is grey.
-    private func levelColor(_ glance: UsageGlance) -> Color {
+    /// White while there is room, yellow from 60%, red from 85%, grey when the data is old.
+    private func numberColor(_ glance: UsageGlance) -> Color {
         guard glance.isCurrent, let hero = glance.hero else { return Palette.stale }
         return Palette.color(for: hero.tone)
-    }
-
-    private func ringColor(_ glance: UsageGlance) -> Color {
-        glance.isCurrent ? levelColor(glance) : Palette.ringStale
     }
 
     private func accessibilitySummary(_ glance: UsageGlance) -> String {
@@ -209,25 +168,56 @@ struct NotchView: View {
     }
 }
 
-/// Apple's dark-mode system colors and grays, as used in the design.
+/// "70%" with a smaller, dimmer percent sign; "—" without a value.
+private struct PercentText: View {
+    let value: Double?
+    let size: CGFloat
+    let unitSize: CGFloat
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: size / 36) {
+            Text(value.map { String(UsageFormatting.percent($0).dropLast()) } ?? "—")
+                .font(.system(size: size, weight: .semibold, design: .rounded).monospacedDigit())
+                .kerning(size > 20 ? -0.5 : 0)
+                .numericTransition(value)
+            if value != nil {
+                Text("%")
+                    .font(.system(size: unitSize, weight: .semibold, design: .rounded))
+                    .opacity(0.6)
+            }
+        }
+        .lineLimit(1)
+    }
+}
+
+/// Apple's dark-mode system colors and grays.
 enum Palette {
-    static let green = Color(hex: 0x30D158)
+    static let blue = Color(hex: 0x0A84FF)
     static let yellow = Color(hex: 0xFFD60A)
     static let red = Color(hex: 0xFF453A)
     static let stale = Color(hex: 0x8E8E93)
-    static let ringStale = Color(hex: 0x636366)
-    static let ringTrack = Color(hex: 0x2C2C2E)
     static let primaryText = Color(hex: 0xF5F5F7)
-    static let secondaryText = Color(hex: 0xAEAEB2)
+    static let secondaryText = Color(hex: 0x98989D)
     static let switchTrack = Color(hex: 0x1C1C1E)
     static let switchThumb = Color(hex: 0x3A3A3C)
-    static let switchText = Color(hex: 0x98989D)
+    static let switchText = Color(hex: 0x8E8E93)
 
+    /// Color of a number: plain white while there is room, so color always means "look".
     static func color(for tone: UsageTone) -> Color {
         switch tone {
-        case .normal: return green
+        case .normal: return primaryText
         case .high: return yellow
         case .critical: return red
+        }
+    }
+
+    /// Color of the mood glyph.
+    static func mood(_ mood: CreatureState) -> Color {
+        switch mood {
+        case .happy: return blue
+        case .worried: return yellow
+        case .panic: return red
+        case .sleeping: return stale
         }
     }
 }
@@ -239,16 +229,16 @@ private extension Color {
     }
 }
 
-/// How the island's content arrives: it fades in, drops 6 pt, grows from 96% and sharpens.
+/// How the island's content arrives: it fades in, drops 4 pt, grows from 97% and sharpens.
 private struct Reveal: ViewModifier {
     let hidden: Bool
 
     func body(content: Content) -> some View {
         content
             .opacity(hidden ? 0 : 1)
-            .offset(y: hidden ? -6 : 0)
-            .scaleEffect(hidden ? 0.96 : 1, anchor: .top)
-            .blur(radius: hidden ? 4 : 0)
+            .offset(y: hidden ? -4 : 0)
+            .scaleEffect(hidden ? 0.97 : 1, anchor: .top)
+            .blur(radius: hidden ? 3 : 0)
     }
 }
 
@@ -270,43 +260,6 @@ private struct NotchBody: Shape {
         let height = collapsed.height + (expanded.height - collapsed.height) * t
         let bodyRect = CGRect(x: rect.midX - width / 2, y: rect.minY, width: width, height: height)
         return Path(geometry.outline(progress: t).path(in: bodyRect))
-    }
-}
-
-/// A single progress ring with the number inside. It sweeps in from empty each time the notch opens.
-private struct UsageRing: View {
-    let value: Double?
-    let color: Color
-    let textColor: Color
-    @State private var appeared = false
-
-    private static let lineWidth: CGFloat = 4.5
-    /// The ring's radius is 18.5 pt in a 44 pt box.
-    private static let inset: CGFloat = 22 - 18.5
-
-    var body: some View {
-        let fraction = appeared ? min(max(value ?? 0, 0), 100) / 100 : 0
-        ZStack {
-            Circle().stroke(Palette.ringTrack, lineWidth: Self.lineWidth)
-            Circle()
-                .trim(from: 0, to: fraction)
-                .stroke(color, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-        }
-        .padding(Self.inset)
-        .overlay {
-            Text(value.map { String(UsageFormatting.percent($0).dropLast()) } ?? "—")
-                .font(.system(size: 11, weight: .heavy, design: .rounded).monospacedDigit())
-                .foregroundStyle(textColor)
-                .numericTransition(value)
-        }
-        .animation(.spring(response: 0.6, dampingFraction: 0.86), value: fraction)
-        .animation(.easeInOut(duration: 0.4), value: color)
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.86).delay(0.1)) { appeared = true }
-        }
-        .accessibilityElement()
-        .accessibilityLabel(value.map { "\(UsageFormatting.percent($0)) used" } ?? "No data")
     }
 }
 
