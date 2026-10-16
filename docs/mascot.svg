@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="240" height="240" role="img" aria-labelledby="title" data-mood="happy">
+  <!--
+    LimitNotch mascot, SVG + CSS edition of the app's Canvas renderer (Sources/LimitNotch/MascotView.swift).
+    Set data-mood on the <svg> to happy, worried, panic or sleep. Mood switching needs the SVG inlined
+    in the page; as an <img> it plays the default mood.
+    Geometry matches the app: diameter 80, eyes 0.10 × 0.22 of the diameter, centered at x −0.15 and +0.03.
+  -->
+  <title id="title">LimitNotch mascot</title>
+  <defs>
+    <linearGradient id="body-fill" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <radialGradient id="alarm-glow">
+      <stop offset="0.55" stop-color="#EF4444" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#EF4444" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <style>
+    .shake, .hop, .tilt, .breathe, .eye-mood, .eye, .glow, .zzz text {
+      transform-box: fill-box;
+    }
+    /* Squash, stretch and breathing pivot on the bottom of the body, where it lands. */
+    .hop, .breathe { transform-origin: 50% 100%; }
+    .tilt, .eye-mood, .eye, .glow { transform-origin: 50% 50%; }
+
+    .breathe { animation: breathe 3s ease-in-out infinite; }
+    .hop { animation: hop 4.5s infinite; }
+    .tilt { animation: lean 9s ease-in-out infinite; }
+    .gaze { animation: gaze 9s ease-in-out infinite; }
+    .eye { animation: blink 7.3s infinite; }
+    .glow, .tint, .zzz { opacity: 0; }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    /* Two blinks per 7.3 s cycle, about 3.3 s and 4 s apart, each ~120 ms. */
+    @keyframes blink {
+      0%, 44%, 45.7%, 96%, 97.7%, 100% { transform: scale(1, 1); }
+      44.8%, 96.8% { transform: scale(1.45, 0.1); }
+    }
+    /* Look left, right, then up; the body leans toward the gaze a beat later. */
+    @keyframes gaze {
+      0%, 28%, 46%, 58%, 74%, 80%, 92%, 100% { transform: translate(0, 0); }
+      31%, 43% { transform: translate(-7px, 0); }
+      61%, 71% { transform: translate(7px, 0); }
+      83%, 89% { transform: translate(0, -5.5px); }
+    }
+    @keyframes lean {
+      0%, 29%, 47%, 59%, 75%, 100% { transform: rotate(0deg); }
+      34%, 43% { transform: rotate(-6deg); }
+      64%, 71% { transform: rotate(6deg); }
+    }
+    /* Anticipation squash, parabolic hop with stretch, landing squash, spring settle. */
+    @keyframes hop {
+      0%, 66% { transform: translate(0, 0) scale(1, 1); animation-timing-function: ease-out; }
+      69% { transform: translate(0, 0) scale(1.1, 0.88); animation-timing-function: ease-out; }
+      71% { transform: translate(0, -2px) scale(0.93, 1.09); animation-timing-function: ease-out; }
+      76% { transform: translate(0, -14px) scale(1, 1); animation-timing-function: ease-in; }
+      81% { transform: translate(0, 0) scale(0.93, 1.09); animation-timing-function: ease-out; }
+      83% { transform: translate(0, 0) scale(1.11, 0.86); animation-timing-function: ease-in-out; }
+      86% { transform: scale(0.97, 1.04); animation-timing-function: ease-in-out; }
+      89% { transform: scale(1.02, 0.98); animation-timing-function: ease-in-out; }
+      92%, 100% { transform: scale(1, 1); }
+    }
+
+    /* Worried: smaller, higher eyes, a slow wobble and quicker glances. No hops. */
+    [data-mood="worried"] .hop { animation: none; }
+    [data-mood="worried"] .eye-mood { transform: translate(0, -5.6px) scale(0.8); }
+    [data-mood="worried"] .tilt { animation: wobble 2.4s ease-in-out infinite; }
+    [data-mood="worried"] .gaze { animation-duration: 3.6s; }
+    [data-mood="worried"] .eye { animation-duration: 3.4s; }
+    @keyframes wobble {
+      0%, 100% { transform: rotate(-3.5deg) translate(-1px, 0); }
+      50% { transform: rotate(3.5deg) translate(1px, 0); }
+    }
+
+    /* Panic: fast blinks, a quick shake and a pulsing red glow. */
+    [data-mood="panic"] .hop, [data-mood="panic"] .tilt { animation: none; }
+    [data-mood="panic"] .shake { animation: shake 0.16s linear infinite; }
+    [data-mood="panic"] .eye-mood { transform: scale(1.08); }
+    [data-mood="panic"] .eye { animation-duration: 1.8s; }
+    [data-mood="panic"] .gaze { animation-duration: 2.2s; }
+    [data-mood="panic"] .glow { opacity: 1; animation: pulse 0.8s ease-in-out infinite; }
+    [data-mood="panic"] .tint { opacity: 0.2; }
+    [data-mood="panic"] .breathe { animation-duration: 1.2s; }
+    @keyframes shake {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(-3px, 0) rotate(-2.5deg); }
+      75% { transform: translate(3px, 0) rotate(2.5deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.55; transform: scale(0.97); }
+      50% { opacity: 1; transform: scale(1.03); }
+    }
+
+    /* Sleep: closed eyes, slow breathing, floating Zzz. */
+    [data-mood="sleep"] .hop, [data-mood="sleep"] .gaze { animation: none; }
+    [data-mood="sleep"] .eye { animation: none; transform: scale(1.5, 0.12); }
+    [data-mood="sleep"] .breathe { animation-duration: 5s; }
+    [data-mood="sleep"] .tilt { animation: doze 5s ease-in-out infinite; }
+    [data-mood="sleep"] .zzz { opacity: 1; }
+    [data-mood="sleep"] .zzz text { animation: drift 3.2s ease-in-out infinite; opacity: 0; }
+    [data-mood="sleep"] .zzz text + text { animation-delay: -1.6s; }
+    @keyframes doze {
+      0%, 100% { transform: rotate(-2deg) translate(0, 1.6px); }
+      50% { transform: rotate(2deg) translate(0, 1.6px); }
+    }
+    @keyframes drift {
+      0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+      50% { opacity: 0.9; }
+      100% { transform: translate(16px, -28px) scale(1.15); opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; }
+    }
+  </style>
+
+  <circle class="glow" cx="60" cy="62" r="64" fill="url(#alarm-glow)"/>
+  <g class="shake">
+    <g class="hop">
+      <g class="tilt">
+        <g class="breathe">
+          <circle cx="60" cy="62" r="40" fill="url(#body-fill)"/>
+          <circle class="tint" cx="60" cy="62" r="40" fill="#EF4444"/>
+          <g class="eye-mood">
+            <g class="gaze">
+              <ellipse class="eye" cx="48" cy="60.4" rx="4" ry="8.8" fill="#FFFFFF"/>
+              <ellipse class="eye" cx="62.4" cy="60.4" rx="4" ry="8.8" fill="#FFFFFF"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g class="zzz" fill="#FFFFFF" font-family="ui-rounded, 'SF Pro Rounded', system-ui, sans-serif" font-weight="800">
+    <text x="86" y="40" font-size="13">z</text>
+    <text x="86" y="40" font-size="13">z</text>
+  </g>
+</svg>

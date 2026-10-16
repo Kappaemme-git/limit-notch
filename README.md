@@ -1,8 +1,19 @@
 # LimitNotch
 
-LimitNotch is a small macOS notch companion built with SwiftUI. It reads `~/.usage-watcher/status.json` every 30 seconds and when opened. It does not use the network, API keys, or external dependencies at runtime.
+LimitNotch lives in the MacBook notch. It is a small macOS companion built with SwiftUI that reads `~/.usage-watcher/status.json` every 30 seconds and whenever it opens. It does not use the network, API keys, or external dependencies at runtime.
 
-The original vector creature bounces in green when `mood` is `happy` or `level` is `ok`, trembles in yellow for `worried` or `warn`, panics in red for `panic` or `crit`, and sleeps in gray when the file is missing, invalid, or over one hour old. `mood` takes priority over `level`. Hover or click to see usage, reset times, source timestamps, and the note. Missing or null values display as `—`.
+Collapsed, a black extension hugs the camera housing: a little blue mascot sits on the left and a ring on the right shows the highest of the three usage values. Hover (or click to pin) and it springs open into a Dynamic Island-style panel with Claude 5h, Claude 7d and Codex 7d bars, time until each reset (`—` when unknown) and when the data was last updated. On displays without a notch it becomes a small pill at the top center of the screen. The panel appears on every Space, stays above full-screen apps, and has no Dock or menu bar icon.
+
+The mascot is a round blue character with two white eyes. It breathes, blinks at random intervals and glances around, leaning toward where it looks. Its mood follows `mood` (or `level` when `mood` is missing):
+
+| Status | Mascot |
+| --- | --- |
+| `happy` / `ok` | Relaxed blinking and the occasional squash-and-stretch hop |
+| `worried` / `warn` | Smaller, raised eyes, a slow wobble and more frequent glances |
+| `panic` / `crit` | Fast blinking, a quick shake and a red glow |
+| missing, invalid, or older than one hour | Asleep: closed eyes, slow breathing, a floating Zzz |
+
+[`docs/mascot.svg`](docs/mascot.svg) is an SVG + CSS version of the same character for web pages; set `data-mood` to `happy`, `worried`, `panic` or `sleep`.
 
 ## Requirements
 
@@ -20,9 +31,9 @@ Run this as your regular macOS user, without `sudo`:
 curl -fsSL https://raw.githubusercontent.com/Kappaemme-git/limit-notch/main/install.sh | bash
 ```
 
-The script clones or updates the `main` branch in `~/.limit-notch/src`, runs `swift build -c release`, installs `~/.limit-notch/LimitNotch`, and starts `~/Library/LaunchAgents/dev.kappaemme.limitnotch.plist`. Running the same command again updates the installation. It creates `~/.usage-watcher` if needed, but does not create or modify `status.json`. The creature stays gray until another program writes a current status file.
+The script clones or updates the `main` branch in `~/.limit-notch/src`, runs `swift build -c release`, installs `~/.limit-notch/LimitNotch`, and starts `~/Library/LaunchAgents/dev.kappaemme.limitnotch.plist`. Running the same command again updates the installation. It creates `~/.usage-watcher` if needed, but does not create or modify `status.json`. The mascot sleeps until another program writes a current status file.
 
-The app runs without a Dock icon. Right-click the creature and choose **Quit LimitNotch** to stop it for the current session. The LaunchAgent starts it again at login and restarts it after a crash.
+The app runs without a Dock icon. Right-click the notch panel and choose **Quit LimitNotch** to stop it for the current session. The LaunchAgent starts it again at login and restarts it after a crash.
 
 ## Uninstall
 
