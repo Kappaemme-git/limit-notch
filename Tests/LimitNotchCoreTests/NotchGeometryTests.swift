@@ -24,41 +24,43 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertEqual(geometry.bodyWidth, 179)
     }
 
-    func testCollapsedBodyIsTheNotchPlusTwoEars() {
+    func testCollapsedBodyIsTheNotchPlusTwoHairlineEars() {
         let geometry = notched()
         let collapsed = geometry.panelFrame(expanded: false)
         // As tall as the notch, flush with the top edge and centered on the camera housing.
         XCTAssertEqual(collapsed.height, geometry.notchRect.height)
         XCTAssertEqual(collapsed.maxY, geometry.notchRect.maxY)
         XCTAssertEqual(collapsed.midX, geometry.notchRect.midX, accuracy: 0.001)
-        // The 179 pt notch plus a 20 pt ear on each side, plus a 6 pt shoulder on each side.
-        XCTAssertEqual(geometry.collapsedBodyWidth, 219)
-        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 231, height: 32))
-        XCTAssertTrue(collapsed.contains(geometry.notchRect))
+        // The 179 pt notch plus a 15 pt ear on each side and no flare: 209 × 32.
+        XCTAssertEqual(geometry.collapsedBodyWidth, 209)
+        XCTAssertEqual(geometry.collapsedSize, CGSize(width: 209, height: 32))
+        XCTAssertEqual(collapsed, CGRect(x: 630.5, y: 924, width: 209, height: 32))
+        XCTAssertEqual(collapsed.minX, geometry.notchRect.minX - NotchGeometry.earWidth)
+        XCTAssertEqual(collapsed.maxX, geometry.notchRect.maxX + NotchGeometry.earWidth)
     }
 
-    func testEarsAreAboutTwoEyesWide() {
+    func testEarsAreAboutOneEyeWide() {
         let widest = [CreatureState.happy, .worried, .panic, .sleeping]
             .map { EyeExpression.for($0).width }.max() ?? 0
         // Each ear adds at most a few points of black around its eye.
-        XCTAssertLessThanOrEqual(NotchGeometry.earWidth - widest, 6)
-        XCTAssertLessThanOrEqual(notched().collapsedBodyWidth - 179, 2 * (widest + 6))
+        XCTAssertLessThanOrEqual(NotchGeometry.earWidth - widest, 4)
+        XCTAssertLessThanOrEqual(notched().collapsedBodyWidth - 179, 2 * (widest + 4))
     }
 
     func testEyesStayBesideTheCamera() {
         let geometry = notched()
-        let shoulder = NotchGeometry.collapsedShoulder
-        let notchLeft = shoulder + NotchGeometry.earWidth
+        let notchLeft = NotchGeometry.earWidth
         let notchRight = notchLeft + geometry.notchRect.width
         let box = NotchGeometry.eyeBox
-        // Each eye's box is centered in its ear and entirely outside the camera housing.
+        // Each eye's box is centered in its ear: on visible pixels, never behind the camera housing.
         let left = geometry.leftEarCenter
-        XCTAssertEqual(left, CGPoint(x: shoulder + 10, y: 16))
+        XCTAssertEqual(left, CGPoint(x: 7.5, y: 16))
         XCTAssertLessThanOrEqual(left.x + box.width / 2, notchLeft)
-        XCTAssertGreaterThanOrEqual(left.x - box.width / 2, shoulder)
+        XCTAssertGreaterThanOrEqual(left.x - box.width / 2, 0)
         let right = geometry.rightEarCenter
-        XCTAssertEqual(right, CGPoint(x: geometry.collapsedSize.width - shoulder - 10, y: 16))
+        XCTAssertEqual(right, CGPoint(x: geometry.collapsedSize.width - 7.5, y: 16))
         XCTAssertGreaterThanOrEqual(right.x - box.width / 2, notchRight)
+        XCTAssertLessThanOrEqual(right.x + box.width / 2, geometry.collapsedSize.width)
         // The box fits in the band, and every expression fits in the box.
         XCTAssertLessThanOrEqual(box.height, geometry.barHeight)
         for mood in [CreatureState.happy, .worried, .panic, .sleeping] {
@@ -70,11 +72,11 @@ final class NotchGeometryTests: XCTestCase {
 
     func testOutlineMorphsFromEarsToIsland() {
         let collapsed = notched().outline(progress: 0)
-        XCTAssertEqual(collapsed, NotchOutline(topRadius: 6, bottomRadius: 10))
+        XCTAssertEqual(collapsed, NotchOutline(topRadius: 0, bottomRadius: 8))
         let expanded = notched().outline(progress: 1)
         XCTAssertEqual(expanded, NotchOutline(topRadius: 10, bottomRadius: 28))
         // Halfway through the spring the radius is halfway between the two shapes.
-        XCTAssertEqual(notched().outline(progress: 0.5).bottomRadius, (10 + 28) / 2)
+        XCTAssertEqual(notched().outline(progress: 0.5).bottomRadius, (8 + 28) / 2)
         XCTAssertEqual(notched().outline(progress: 3), expanded)
     }
 
@@ -87,9 +89,14 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertTrue(path.contains(CGPoint(x: rect.midX, y: rect.height - 0.5)))
         XCTAssertTrue(path.contains(notched().leftEarCenter))
         XCTAssertTrue(path.contains(notched().rightEarCenter))
-        // The shoulders flare out only at the top edge.
-        XCTAssertTrue(path.contains(CGPoint(x: 2, y: 0.2)))
-        XCTAssertFalse(path.contains(CGPoint(x: 2, y: 4)))
+        // Collapsed, the sides drop straight from the top edge.
+        XCTAssertTrue(path.contains(CGPoint(x: 0.5, y: 0.5)))
+        XCTAssertTrue(path.contains(CGPoint(x: 0.5, y: rect.height / 2)))
+        // Expanded, the shoulders flare out only at the top edge.
+        let island = CGRect(origin: .zero, size: notched().expandedSize)
+        let open = notched().outline(progress: 1).path(in: island)
+        XCTAssertTrue(open.contains(CGPoint(x: 2, y: 0.2)))
+        XCTAssertFalse(open.contains(CGPoint(x: 2, y: 6)))
         XCTAssertFalse(path.contains(CGPoint(x: 0.5, y: rect.height - 0.5)))
         XCTAssertFalse(path.contains(CGPoint(x: rect.width - 0.5, y: rect.height - 0.5)))
         XCTAssertTrue(NotchOutline(topRadius: 4, bottomRadius: 8).path(in: .zero).isEmpty)

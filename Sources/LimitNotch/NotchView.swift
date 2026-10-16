@@ -3,12 +3,13 @@ import LimitNotchCore
 import SwiftUI
 
 /// The notch is the bot's face: collapsed, the black shape is the camera housing with an eye in
-/// each ear. Hovering opens the mouth, which shows the number, its reset time and the service
+/// each hairline ear. Hovering opens the mouth, which shows the number, its reset time and the service
 /// switch. The fixed-size drawing surface prevents layout work during the silhouette spring; the
 /// panel window clips it to the collapsed face or to the open mouth.
 struct NotchView: View {
     @ObservedObject var store: StatusStore
     @ObservedObject var notch: NotchState
+    let eyes: EyeRig
     @AppStorage("serviceSelection") private var selection: ServiceSelection = .auto
     @Namespace private var pill
 
@@ -42,11 +43,11 @@ struct NotchView: View {
                     ))
             }
 
-            BotEyes(mood: glance.mood,
+            BotEyes(rig: eyes, glance: glance,
                     left: offsetByOrigin(geometry.leftEarCenter),
-                    right: offsetByOrigin(geometry.rightEarCenter),
-                    isAnimating: notch.isAnimating,
-                    isLookingDown: expanded)
+                    right: offsetByOrigin(geometry.rightEarCenter))
+                // The glow stays on the black, never on the menu bar beside it.
+                .mask(NotchBody(geometry: geometry, progress: expanded ? 1 : 0))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
@@ -162,7 +163,6 @@ private struct PercentText: View {
 
 /// Apple's dark-mode system colors and grays.
 enum Palette {
-    static let eyeBlue = Color(hex: 0x409CFF)
     static let yellow = Color(hex: 0xFFD60A)
     static let red = Color(hex: 0xFF453A)
     static let stale = Color(hex: 0x8E8E93)
@@ -182,12 +182,12 @@ enum Palette {
     }
 
     /// Color of the eyes; the blue is the brighter high-contrast variant so it reads on black.
-    static func mood(_ mood: CreatureState) -> Color {
+    static func mood(_ mood: CreatureState) -> RGB {
         switch mood {
-        case .happy: return eyeBlue
-        case .worried: return yellow
-        case .panic: return red
-        case .sleeping: return stale
+        case .happy: return RGB(hex: 0x409CFF)
+        case .worried: return RGB(hex: 0xFFD60A)
+        case .panic: return RGB(hex: 0xFF453A)
+        case .sleeping: return RGB(hex: 0x8E8E93)
         }
     }
 }

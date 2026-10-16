@@ -21,6 +21,9 @@ struct LimitNotchApp {
 private final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = StatusStore()
     private let notch = NotchState(geometry: AppDelegate.currentGeometry())
+    private let eyes = EyeRig()
+    private var screensAsleep = false
+    private var sessionActive = true
     private var panel: NotchPanel?
     private var container: NotchContainerView?
     private var pendingShrink: Task<Void, Never>?
@@ -46,7 +49,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         let container = NotchContainerView(
             frame: NSRect(origin: .zero, size: notch.geometry.collapsedSize),
             drawingSize: notch.geometry.expandedSize,
-            rootView: NotchView(store: store, notch: notch)
+            rootView: NotchView(store: store, notch: notch, eyes: eyes)
         )
         container.onHoverChange = { [weak self] hovered in self?.notch.setHovered(hovered) }
         panel.contentView = container
@@ -54,6 +57,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         self.panel = panel
 
         notch.onExpansionChange = { [weak self] expanded in self?.expansionChanged(expanded) }
+        eyes.layout = EyeLayout(notch.geometry)
+        logGeometry()
         store.start()
         panel.orderFrontRegardless()
         if ProcessInfo.processInfo.environment["LIMITNOTCH_DEBUG_EXPANDED"] == "1" {
@@ -68,12 +73,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
                               name: NSWorkspace.screensDidSleepNotification, object: nil)
         workspace.addObserver(self, selector: #selector(screensDidWake),
                               name: NSWorkspace.screensDidWakeNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(sessionDidResignActive),
+                              name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(sessionDidBecomeActive),
+                              name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        center.addObserver(self, selector: #selector(occlusionChanged),
+                           name: NSWindow.didChangeOcclusionStateNotification, object: panel)
     }
 
     private func expansionChanged(_ expanded: Bool) {
         pendingShrink?.cancel()
+        eyes.setExpanded(expanded)
         if expanded {
-            notch.isAnimating = true
             store.refresh()
             setPanelFrame(expanded: true)
         } else {
@@ -92,16 +103,54 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screenConfigurationChanged(_ notification: Notification) {
         notch.update(geometry: Self.currentGeometry())
+        logGeometry()
         container?.drawingSize = notch.geometry.expandedSize
         setPanelFrame(expanded: notch.isExpanded)
+        eyes.layout = EyeLayout(notch.geometry)
+    }
+
+    /// Records the hardware notch next to the collapsed face, to check one against the other.
+    private func logGeometry() {
+        let geometry = notch.geometry
+        let face = geometry.panelFrame(expanded: false)
+        if geometry.hasNotch {
+            NSLog("LimitNotch: notch %@, collapsed face %@ (ears %.1f / %.1f pt)",
+                  NSStringFromRect(geometry.notchRect), NSStringFromRect(face),
+                  geometry.notchRect.minX - face.minX, face.maxX - geometry.notchRect.maxX)
+        } else {
+            NSLog("LimitNotch: no notch on %@, fallback pill %@",
+                  NSStringFromRect(geometry.screenFrame), NSStringFromRect(face))
+        }
     }
 
     @objc private func screensDidSleep(_ notification: Notification) {
-        notch.isAnimating = false
+        screensAsleep = true
+        updateEyeVisibility()
     }
 
     @objc private func screensDidWake(_ notification: Notification) {
-        notch.isAnimating = true
+        screensAsleep = false
+        updateEyeVisibility()
+    }
+
+    @objc private func sessionDidResignActive(_ notification: Notification) {
+        sessionActive = false
+        updateEyeVisibility()
+    }
+
+    @objc private func sessionDidBecomeActive(_ notification: Notification) {
+        sessionActive = true
+        updateEyeVisibility()
+    }
+
+    @objc private func occlusionChanged(_ notification: Notification) {
+        updateEyeVisibility()
+    }
+
+    /// The eyes stop moving and stop following the pointer whenever nobody can see them.
+    private func updateEyeVisibility() {
+        let onScreen = panel?.occlusionState.contains(.visible) ?? false
+        eyes.setVisible(onScreen && !screensAsleep && sessionActive)
     }
 
     /// Prefers the notched built-in display, then any built-in display, then the main screen.

@@ -5,22 +5,24 @@ import CoreGraphics
 /// `safeAreaInsets.top`, the widths of `auxiliaryTopLeftArea` / `auxiliaryTopRightArea` and
 /// `backingScaleFactor`.
 ///
-/// Collapsed, the black body is exactly the camera housing reported by NSScreen plus a narrow ear
-/// on each side, each holding one of the bot's eyes, so the notch reads as a face: 219 × 32 pt
-/// around a 179 pt notch. Hover opens its "mouth" downward into a 260 × 138 pt island.
+/// Collapsed, the black body is exactly the camera housing reported by NSScreen plus a hairline ear
+/// on each side, with no flare at the top edge. The housing has no pixels, so each ear holds one of
+/// the bot's eyes on the nearest visible ones: 209 × 32 pt around a 179 pt notch. Hover opens its
+/// "mouth" downward into a 260 × 138 pt island.
 public struct NotchGeometry: Equatable, Sendable {
     /// Height of the top-center pill on displays without a notch.
     public static let fallbackPillHeight: CGFloat = 28
     /// Menu bar height assumed when it cannot be measured (for example, when it auto-hides).
     public static let defaultMenuBarHeight: CGFloat = 24
     /// Width of each ear beside the camera housing: one eye plus a hairline of black around it.
-    public static let earWidth: CGFloat = 20
+    public static let earWidth: CGFloat = 15
     /// The box every eye expression fits in, centered in its ear.
-    public static let eyeBox = CGSize(width: 16, height: 22)
-    /// Concave flare where the body meets the top edge, outside the body on each side.
-    public static let collapsedShoulder: CGFloat = 6
+    public static let eyeBox = CGSize(width: 12, height: 22)
+    /// Concave flare where the body meets the top edge, outside the body on each side. Collapsed
+    /// there is none, so the face is only as wide as the housing and its two ears.
+    public static let collapsedShoulder: CGFloat = 0
     public static let expandedShoulder: CGFloat = 10
-    public static let collapsedBottomRadius: CGFloat = 10
+    public static let collapsedBottomRadius: CGFloat = 8
     public static let expandedBottomRadius: CGFloat = 28
     /// Height of the mouth below the notch band when expanded.
     public static let expandedContentHeight: CGFloat = 106

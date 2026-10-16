@@ -77,6 +77,8 @@ public struct UsageGlance: Equatable, Sendable {
 
     public let freshness: Freshness
     public let selection: ServiceSelection
+    /// Every window of the selected service (of both on Auto), in display order.
+    public let windows: [UsageWindow]
     /// The highest window of the selected service (of both on Auto); the earliest in display
     /// order wins a tie.
     public let hero: UsageWindow?
@@ -102,6 +104,7 @@ public struct UsageGlance: Equatable, Sendable {
         self.selection = selection
 
         let candidates = windows.filter { selection.service == nil || $0.service == selection.service }
+        self.windows = candidates
         let hero = Self.highest(candidates)
         self.hero = hero
 

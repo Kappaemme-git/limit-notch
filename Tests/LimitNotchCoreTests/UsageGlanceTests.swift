@@ -25,6 +25,11 @@ final class UsageGlanceTests: XCTestCase {
         XCTAssertEqual(codex.others.map(\.title), ["Claude weekly", "Codex weekly"])
     }
 
+    func testWindowsFollowTheSelection() {
+        XCTAssertEqual(glance(design).windows.map(\.title), ["Claude", "Claude weekly", "Codex", "Codex weekly"])
+        XCTAssertEqual(glance(design, selection: .codex).windows.map(\.title), ["Codex", "Codex weekly"])
+    }
+
     func testSelectionDrivesTheHeroAndTheMood() {
         let fields = #""claude_5h":30,"claude_7d":17,"codex_7d":90"#
         let auto = glance(fields)
